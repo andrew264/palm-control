@@ -1,0 +1,8 @@
+# python environment
+/.venv
+
+# models
+/models
+
+# intelij
+/.idea
