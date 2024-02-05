@@ -2,10 +2,11 @@ import os
 
 import cv2
 import mediapipe as mp
+import numpy as np
 import requests
 from mediapipe.tasks import python
 
-from utils import HAND_CONNECTIONS, _landmarks_list_to_array
+from utils import HAND_CONNECTIONS, _landmarks_list_to_array, HandLandmarkKalmanFilter, _rescale_landmarks
 
 BaseOptions = mp.tasks.BaseOptions
 HandLandmarker = mp.tasks.vision.HandLandmarker
@@ -24,11 +25,6 @@ def get_hand_landmark_model():
 
 
 def draw_landmarks_on_image(image, landmark_point: list):
-    if not landmark_point:
-        return image
-
-    landmark_point = _landmarks_list_to_array(landmark_point, image.shape)
-
     colors = [(0, 0, 0), (255, 255, 255)]
 
     def draw_line(start, end, thickness):
@@ -51,11 +47,12 @@ def draw_landmarks_on_image(image, landmark_point: list):
 if __name__ == '__main__':
     options = HandLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=get_hand_landmark_model()),
-        num_hands=2,
+        num_hands=1,
         min_hand_detection_confidence=0.6,
         min_hand_presence_confidence=0.6,
         min_tracking_confidence=0.5,
         running_mode=VisionRunningMode.VIDEO, )
+    kalman_filter = HandLandmarkKalmanFilter(initial_state=np.zeros(42))
     with HandLandmarker.create_from_options(options) as landmarker:
         cap = cv2.VideoCapture(0)
         timestamp = 0
@@ -68,7 +65,9 @@ if __name__ == '__main__':
             hand_landmarker_result = landmarker.detect_for_video(mp_image, timestamp)
             timestamp += 1
             for hand_landmarks in hand_landmarker_result.hand_landmarks:
-                image = draw_landmarks_on_image(image, hand_landmarks)
+                smoothened_points = kalman_filter.update(_landmarks_list_to_array(hand_landmarks))
+                rescaled_points = _rescale_landmarks(smoothened_points, image.shape)
+                image = draw_landmarks_on_image(image, rescaled_points)
             cv2.imshow('MediaPipe Hand Landmarks', image)
             if cv2.waitKey(5) & 0xFF == 27:
                 break

@@ -6,3 +6,6 @@
 
 # intelij
 /.idea
+
+# python cache
+*.pyc

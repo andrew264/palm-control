@@ -1,3 +1,5 @@
 mediapipe
 opencv-python
 requests
+filterpy
+numpy
