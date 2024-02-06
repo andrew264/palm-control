@@ -1,5 +1,6 @@
-mediapipe
+openmim
 opencv-python
 requests
 filterpy
 numpy
+pyautogui

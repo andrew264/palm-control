@@ -1,79 +1,111 @@
-import os
+import threading
 import time
+from typing import Optional, Any
 
 import cv2
-import mediapipe as mp
 import numpy as np
-import requests
-from mediapipe.tasks import python
+from mmdet.apis import init_detector, inference_detector
+from mmpose.apis import init_model, inference_topdown
+from mmpose.utils import adapt_mmdet_pipeline
 
-from utils import HAND_CONNECTIONS, _landmarks_list_to_array, HandLandmarkKalmanFilter, _rescale_landmarks
+from hand import Hand
+from utils import HAND_CONNECTIONS
 
-BaseOptions = mp.tasks.BaseOptions
-HandLandmarker = mp.tasks.vision.HandLandmarker
-HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
-VisionRunningMode = mp.tasks.vision.RunningMode
-
-
-def get_hand_landmark_model():
-    path = 'models/hand_landmarker.task'
-    if not os.path.exists(path):
-        url = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task'
-        with open(path, "wb") as f:
-            print(f'Downloading model from {url}')
-            f.write(requests.get(url).content)
-    return path
+hand = Hand()
 
 
-def draw_landmarks_on_image(image, landmark_point: list):
+def load_models():
+    det_config = './models/rtm/rtmdet_nano_320-8xb32_hand.py'
+    det_weights = './models/rtm/rtmdet_nano_8xb32-300e_hand.pth'
+
+    pose_config = './models/rtm/rtmpose-m_8xb256-210e_hand5-256x256.py'
+    pose_weights = './models/rtm/rtmpose-m_simcc-hand5_pt-aic-coco_210e-256x256.pth'
+    detector = init_detector(det_config, det_weights, device='cuda:0')
+    detector.cfg = adapt_mmdet_pipeline(detector.cfg)
+    pose_estimator = init_model(pose_config, pose_weights,
+                                device='cuda:0', )
+    return detector, pose_estimator
+
+
+def process_one_image(img, detector, pose_estimator) -> Optional[Any]:
+    """Return the keypoints of the hand in the image as a numpy array."""
+    det_result = inference_detector(detector, img)
+    pred_instance = det_result.pred_instances.cpu().numpy()[0]
+    if pred_instance['scores'][0] < 0.2:  # threshold for bounding box
+        return None
+    bboxes = pred_instance['bboxes']
+
+    pose_results = inference_topdown(pose_estimator, img, bboxes)
+    return pose_results[0].pred_instances['keypoints'][0]
+
+
+def check_if_hand_is_fucking_up(landmarks: np.ndarray) -> bool:
+    pass
+
+
+def do_hand_tracking(video_device_id: int = 0, show_raw_image: bool = False):
+    cap = cv2.VideoCapture(video_device_id)
+    # set mpeg format
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+    cap.set(cv2.CAP_PROP_FPS, 45)
+    detector, estimator = load_models()
+
+    while cap.isOpened():
+        success, image = cap.read()
+        if not success:
+            time.sleep(0.1)
+            continue
+        image = cv2.flip(image, 1)
+        landmarks = process_one_image(image, detector, estimator)
+        if landmarks is not None:
+            if show_raw_image:
+                draw_landmarks_on_image(image, landmarks)
+            hand.update(landmarks)
+        if show_raw_image:
+            cv2.imshow('Hand Tracking', image)
+            if cv2.waitKey(1) == 27:
+                break
+        else:
+            hand.update(None)
+
+
+def draw_landmarks_on_image(img, _points: Optional[np.ndarray]):
+    if _points is None:
+        return img
+    # landmark_point = _rescale_landmarks(_points, img.shape)
+    _points = _points.astype(int)
     colors = [(0, 0, 0), (255, 255, 255)]
 
-    def draw_line(start, end, thickness):
-        cv2.line(image, tuple(start), tuple(end), colors[0], thickness + 4)
-        cv2.line(image, tuple(start), tuple(end), colors[1], thickness)
+    def draw_line(_start, _end, thickness):
+        cv2.line(img, tuple(_start), tuple(_end), colors[0], thickness + 4)
+        cv2.line(img, tuple(_start), tuple(_end), colors[1], thickness)
 
     def draw_circle(center, radius, thickness):
-        cv2.circle(image, tuple(center), radius + 3, colors[0], -1)
-        cv2.circle(image, tuple(center), radius, colors[1], thickness)
+        cv2.circle(img, tuple(center), radius + 3, colors[0], -1)
+        cv2.circle(img, tuple(center), radius, colors[1], thickness)
 
     for start, end in HAND_CONNECTIONS:
-        draw_line(landmark_point[start], landmark_point[end], 6)
+        draw_line(_points[start], _points[end], 6)
 
-    for index in range(len(landmark_point)):
-        draw_circle(landmark_point[index], 5 if index < 13 else 8, 1)
+    for index in range(len(_points)):
+        draw_circle(_points[index], 5 if index < 13 else 8, 1)
 
-    return image
+    return img
 
 
 if __name__ == '__main__':
-    options = HandLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=get_hand_landmark_model()),
-        num_hands=2,
-        min_hand_detection_confidence=0.6,
-        min_hand_presence_confidence=0.6,
-        min_tracking_confidence=0.5,
-        running_mode=VisionRunningMode.VIDEO, )
-    kalman_filters = [HandLandmarkKalmanFilter(initial_state=np.zeros(42))]
-    with HandLandmarker.create_from_options(options) as landmarker:
-        cap = cv2.VideoCapture(0)
-        timestamp = 0
-        while cap.isOpened():
-            success, image = cap.read()
-            if not success:
-                time.sleep(0.1)
-                continue
-            image = cv2.flip(image, 1)
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
-            hand_landmarker_result = landmarker.detect_for_video(mp_image, timestamp)
-            timestamp += 1
-            for i, hand_landmarks in enumerate(hand_landmarker_result.hand_landmarks):
-                if len(kalman_filters) <= i:
-                    kalman_filters.append(HandLandmarkKalmanFilter(_landmarks_list_to_array(hand_landmarks)))
-                smoothened_points = kalman_filters[i].update(_landmarks_list_to_array(hand_landmarks))
-                rescaled_points = _rescale_landmarks(smoothened_points, image.shape)
-                image = draw_landmarks_on_image(image, rescaled_points)
-            cv2.imshow('MediaPipe Hand Landmarks', image)
-            if cv2.waitKey(5) & 0xFF == 27:
-                break
-        cap.release()
-        cv2.destroyAllWindows()
+    # do_hand_tracking(show_raw_image=True)
+    threading.Thread(target=do_hand_tracking, daemon=True).start()
+    while True:
+        t = time.time()
+        time.sleep(1 / 120)
+        img = np.zeros((720, 1280, 3), dtype=np.uint8)
+        img = draw_landmarks_on_image(img, hand.coordinates)
+        # img = draw_landmarks_on_image(img, l_hand.coordinates)
+        fps = 1 / (time.time() - t)
+        cv2.putText(img, f'FPS: {fps:.2f}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+        cv2.imshow('Hand Tracking', img)
+        if cv2.waitKey(1) == 27:
+            break
+    cv2.destroyAllWindows()
