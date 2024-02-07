@@ -9,9 +9,9 @@ from mmpose.apis import init_model, inference_topdown
 from mmpose.utils import adapt_mmdet_pipeline
 
 from hand import Hand
-from utils import HAND_CONNECTIONS
+from utils import HAND_CONNECTIONS, _rescale_landmarks
 
-hand = Hand()
+hand = Hand(enable_smoothing=True)
 
 
 def load_models():
@@ -27,16 +27,19 @@ def load_models():
     return detector, pose_estimator
 
 
-def process_one_image(img, detector, pose_estimator) -> Optional[Any]:
+def process_one_image(_img, detector, pose_estimator) -> Optional[Any]:
     """Return the keypoints of the hand in the image as a numpy array."""
-    det_result = inference_detector(detector, img)
+    height, width = _img.shape[:2]
+    det_result = inference_detector(detector, _img)
     pred_instance = det_result.pred_instances.cpu().numpy()[0]
     if pred_instance['scores'][0] < 0.2:  # threshold for bounding box
         return None
     bboxes = pred_instance['bboxes']
 
-    pose_results = inference_topdown(pose_estimator, img, bboxes)
-    return pose_results[0].pred_instances['keypoints'][0]
+    pose_results = inference_topdown(pose_estimator, _img, bboxes)
+    results = pose_results[0].pred_instances['keypoints'][0]
+    normed_results = results[:, :2] / np.array([width, height])
+    return normed_results
 
 
 def check_if_hand_is_fucking_up(landmarks: np.ndarray) -> bool:
@@ -69,20 +72,19 @@ def do_hand_tracking(video_device_id: int = 0, show_raw_image: bool = False):
             hand.update(None)
 
 
-def draw_landmarks_on_image(img, _points: Optional[np.ndarray]):
+def draw_landmarks_on_image(_img, _points: Optional[np.ndarray]):
     if _points is None:
-        return img
-    # landmark_point = _rescale_landmarks(_points, img.shape)
-    _points = _points.astype(int)
+        return _img
+    _points = _rescale_landmarks(_points, _img.shape)
     colors = [(0, 0, 0), (255, 255, 255)]
 
     def draw_line(_start, _end, thickness):
-        cv2.line(img, tuple(_start), tuple(_end), colors[0], thickness + 4)
-        cv2.line(img, tuple(_start), tuple(_end), colors[1], thickness)
+        cv2.line(_img, tuple(_start), tuple(_end), colors[0], thickness + 4)
+        cv2.line(_img, tuple(_start), tuple(_end), colors[1], thickness)
 
     def draw_circle(center, radius, thickness):
-        cv2.circle(img, tuple(center), radius + 3, colors[0], -1)
-        cv2.circle(img, tuple(center), radius, colors[1], thickness)
+        cv2.circle(_img, tuple(center), radius + 3, colors[0], -1)
+        cv2.circle(_img, tuple(center), radius, colors[1], thickness)
 
     for start, end in HAND_CONNECTIONS:
         draw_line(_points[start], _points[end], 6)
@@ -90,7 +92,7 @@ def draw_landmarks_on_image(img, _points: Optional[np.ndarray]):
     for index in range(len(_points)):
         draw_circle(_points[index], 5 if index < 13 else 8, 1)
 
-    return img
+    return _img
 
 
 if __name__ == '__main__':
