@@ -80,6 +80,37 @@ class Hand:
             return self.filter.x.reshape(-1, self.axis_dim)
         return None
 
+    def do_action(self):
+        # MOUSE MOVEMENT
+        if self.are_these_straight(fingers=INDEX_FINGER):
+            print('Index finger is straight')
+            # calculate the difference between the current and the last pointer location
+            pointer_location = self.coordinates_of(HandLandmark.INDEX_FINGER_TIP)
+            delta_x = (pointer_location[0] - self._last_pointer_location[0]) * SCREEN_WIDTH
+            delta_y = (pointer_location[1] - self._last_pointer_location[1]) * SCREEN_HEIGHT
+            match closest := self.get_closest_finger_to_thumb():
+                case None:
+                    pyautogui.moveRel(delta_x, delta_y, duration=0.01, _pause=False)
+                    print('Moving mouse')
+                # case HandLandmark.INDEX_FINGER_TIP:
+                #     if self.allow_click():
+                #         pyautogui.scroll(delta_y)
+                #     print('Scrolling')
+                # case HandLandmark.MIDDLE_FINGER_TIP:
+                #     pyautogui.dragRel(delta_x, delta_y)
+                #     print('Dragging')
+                # case HandLandmark.RING_FINGER_TIP:
+                #     if self.allow_click():
+                #         pyautogui.click()
+                #     print('Clicking')
+                # case HandLandmark.PINKY_TIP:
+                #     if self.allow_click():
+                #         pyautogui.rightClick()
+                #     print('Right clicking')
+                case _:
+                    print('Unknown finger, wtf?', closest)
+            self._last_pointer_location = self.coordinates_of(HandLandmark.INDEX_FINGER_TIP)
+
     def update(self, data: Optional[np.ndarray]) -> Optional[np.ndarray]:
         if data is None:
             self._last_update += 1
@@ -93,36 +124,6 @@ class Hand:
         if data.ndim > 1:
             data = data.flatten()
         self.filter.update(data)
-
-        # MOUSE MOVEMENT
-        if self.are_these_straight(fingers=INDEX_FINGER):
-            print('Index finger is straight')
-            # calculate the difference between the current and the last pointer location
-            pointer_location = self.coordinates_of(HandLandmark.INDEX_FINGER_TIP)
-            delta_x = (pointer_location[0] - self._last_pointer_location[0]) * SCREEN_WIDTH
-            delta_y = (pointer_location[1] - self._last_pointer_location[1]) * SCREEN_HEIGHT
-            match closest := self.get_closest_finger_to_thumb():
-                case None:
-                    pyautogui.moveRel(delta_x, delta_y)
-                    print('Moving mouse')
-                # case HandLandmark.INDEX_FINGER_TIP:
-                #     if self.allow_click():
-                #         pyautogui.scroll(delta_y)
-                #     print('Scrolling')
-                case HandLandmark.MIDDLE_FINGER_TIP:
-                    pyautogui.dragRel(delta_x, delta_y)
-                    print('Dragging')
-                case HandLandmark.RING_FINGER_TIP:
-                    if self.allow_click():
-                        pyautogui.click()
-                    print('Clicking')
-                case HandLandmark.PINKY_TIP:
-                    if self.allow_click():
-                        pyautogui.rightClick()
-                    print('Right clicking')
-                case _:
-                    print('Unknown finger, wtf?', closest)
-            self._last_pointer_location = self.coordinates_of(HandLandmark.INDEX_FINGER_TIP)
 
         return self.filter.x.reshape(-1, self.axis_dim)
 
