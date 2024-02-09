@@ -15,6 +15,8 @@ class YOLO:
         self.labels = labels
         try:
             self.net = cv2.dnn.readNetFromDarknet(config, model)
+            self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+            self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA_FP16)
         except:
             raise ValueError("Couldn't find the models!\nDid you forget to download them manually (and keep in the "
                              "correct directory, models/) or run the shell script?")

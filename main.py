@@ -8,11 +8,20 @@ from mmpose.apis import init_model, inference_topdown
 from torch import nn
 
 from hand import Hand
-from utils import HAND_CONNECTIONS, _rescale_landmarks
+from utils import HAND_CONNECTIONS, _rescale_landmarks, KalmanFilterObj
 from yolo import YOLO
 
 hand = Hand(enable_smoothing=True)
 NUM_HANDS = 1
+det_filter = KalmanFilterObj(4, enable_smoothing=True)
+
+cap = cv2.VideoCapture(0)
+CAMERA_WIDTH = 1280
+CAMERA_HEIGHT = 720
+cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+cap.set(cv2.CAP_PROP_FPS, 60)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
 
 
 def load_models() -> tuple[YOLO, nn.Module]:
@@ -22,35 +31,61 @@ def load_models() -> tuple[YOLO, nn.Module]:
     # from https://github.com/noorkhokhar99/yolo_hand_detection
     detector = YOLO("models/yolo/cross-hands-yolov4-tiny.cfg",
                     "models/yolo/cross-hands-yolov4-tiny.weights",
-                    ["hand"])
+                    ["hand"], confidence=0.1, threshold=0.2)
 
     pose_estimator = init_model(pose_config, pose_weights,
                                 device='cuda:0', )
     return detector, pose_estimator
 
 
+def get_bbox_from_det(detector: YOLO, _img) -> Optional[Any]:
+    """
+    Return the bounding box of the hand in the image as a numpy array.
+    Format: [x, y, w, h]
+    """
+    width, height, inference_time, results = detector.inference(_img)
+    if results:
+        results.sort(key=lambda x: x[2])  # sort by confidence
+        bboxes = results[:NUM_HANDS]
+        bbox = bboxes[0][3:]
+        bbox = (bbox[0] - 75, bbox[1] - 75, bbox[2] + 150, bbox[3] + 150)
+        det_filter.update(np.array(bbox))
+    return det_filter.predict()
+
+
 def process_one_image(_img, detector: YOLO, pose_estimator: nn.Module) -> Optional[Any]:
     """Return the keypoints of the hand in the image as a numpy array."""
-    width, height, inference_time, results = detector.inference(_img)
-    results.sort(key=lambda x: x[2])
-    bboxes = [x[3:] for x in results[:NUM_HANDS]]
+    bbox = get_bbox_from_det(detector, _img)
+    if bbox is not None:
+        width, height = _img.shape[:2]
+        pose_results = inference_topdown(pose_estimator, _img, [bbox], bbox_format='xywh')
+        if pose_results:
+            results = pose_results[0].pred_instances['keypoints'][0]
+            if results.min() < 1 or results.max() > CAMERA_WIDTH + 200:
+                return None
+            normed_results = results[:, :2] / np.array([width, height])
+            return normed_results if is_hand_good(normed_results) else None
+    return None
 
-    pose_results = inference_topdown(pose_estimator, _img, bboxes)
-    results = pose_results[0].pred_instances['keypoints'][0]
-    normed_results = results[:, :2] / np.array([width, height])
-    return normed_results
+
+def is_hand_good(landmarks: np.ndarray, threshold: int = 5) -> bool:
+    """
+    landmarks shape [21, 2] float32
+    if more the threshold points are along the same x-axis return false
+    if more the threshold points are along the same y-axis return false
+    """
+    x, y = landmarks[:, 0], landmarks[:, 1]
+    x = np.round(x, 2)
+    y = np.round(y, 2)
+    x_unique, x_counts = np.unique(x, return_counts=True)
+    y_unique, y_counts = np.unique(y, return_counts=True)
+    if x_counts.max() > threshold or y_counts.max() > threshold:
+        return False
+    return True
 
 
-def check_if_hand_is_fucking_up(landmarks: np.ndarray) -> bool:
-    pass
-
-
-def do_hand_tracking(video_device_id: int = 0, show_raw_image: bool = False):
+def do_hand_tracking():
     detector, estimator = load_models()
-    cap = cv2.VideoCapture(video_device_id)
-    # set mpeg format
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
-    cap.set(cv2.CAP_PROP_FPS, 45)
 
     while cap.isOpened():
         success, image = cap.read()
@@ -59,22 +94,11 @@ def do_hand_tracking(video_device_id: int = 0, show_raw_image: bool = False):
             continue
         image = cv2.flip(image, 1)
         landmarks = process_one_image(image, detector, estimator)
-        if landmarks is not None:
-            if show_raw_image:
-                draw_landmarks_on_image(image, landmarks)
-            hand.update(landmarks)
-        if show_raw_image:
-            cv2.imshow('Hand Tracking', image)
-            if cv2.waitKey(1) == 27:
-                break
-        else:
-            hand.update(None)
+        hand.update(landmarks)
 
 
-def draw_landmarks_on_image(_img, _points: Optional[np.ndarray]):
-    if _points is None:
-        return _img
-    _points = _rescale_landmarks(_points, _img.shape)
+def draw_landmarks_on_image(_img: np.ndarray, _points: np.ndarray):
+    _points = _rescale_landmarks(_points, *_img.shape[:2])
     colors = [(0, 0, 0), (255, 255, 255)]
 
     def draw_line(_start, _end, thickness):
@@ -95,7 +119,7 @@ def draw_landmarks_on_image(_img, _points: Optional[np.ndarray]):
 
 
 if __name__ == '__main__':
-    # do_hand_tracking(show_raw_image=True)
+    # do_hand_tracking()
     print("Starting hand tracking thread")
     threading.Thread(target=do_hand_tracking, daemon=True, name="Tracking-Thread").start()
     print("Waiting for hand tracking to start...")
@@ -105,9 +129,10 @@ if __name__ == '__main__':
     while True:
         t = time.time()
         time.sleep(1 / 120)
-        img = np.zeros((720, 1280, 3), dtype=np.uint8)
-        img = draw_landmarks_on_image(img, hand.coordinates)
-        hand.do_action()
+        img = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)
+        if not hand.is_missing:
+            img = draw_landmarks_on_image(img, hand.coordinates)
+            hand.do_action(disable_clicks=False)
         fps = 1 / (time.time() - t)
         cv2.putText(img, f'FPS: {fps:.2f}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 

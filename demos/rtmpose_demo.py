@@ -1,8 +1,9 @@
 import cv2
 from mmdet.apis import inference_detector, init_detector
-from mmpose.apis import inference_topdown
-from mmpose.apis import init_model as init_pose_estimator
+from mmpose.apis import inference_topdown, init_model as init_pose_estimator
 from mmpose.utils import adapt_mmdet_pipeline
+
+from main import draw_landmarks_on_image
 
 det_cat_id = 0
 bbox_thr = 0.2
@@ -20,6 +21,12 @@ det_weights = '../models/rtm/rtmdet_nano_8xb32-300e_hand.pth'
 pose_config = '../models/rtm/rtmpose-m_8xb256-210e_hand5-256x256.py'
 pose_weights = '../models/rtm/rtmpose-m_simcc-hand5_pt-aic-coco_210e-256x256.pth'
 
+cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+cap.set(cv2.CAP_PROP_FPS, 60)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
 
 def process_one_image(img,
                       detector,
@@ -27,6 +34,8 @@ def process_one_image(img,
     # predict bbox
     det_result = inference_detector(detector, img)
     pred_instance = det_result.pred_instances.cpu().numpy()
+    if len(pred_instance) == 0:
+        return None
     score = pred_instance[0]['scores'][0]
     if score < bbox_thr:
         return None
@@ -45,10 +54,6 @@ def main():
                                          device='cuda:0',
                                          cfg_options=dict(model=dict(test_cfg=dict(output_heatmaps=False))))
 
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
-    cap.set(cv2.CAP_PROP_FPS, 60)
-
     while cap.isOpened():
         success, frame = cap.read()
         if not success:
@@ -58,10 +63,10 @@ def main():
         landmarks = process_one_image(frame, detector, pose_estimator)
 
         if landmarks is not None:
-            print(landmarks)
-        else:
-            print('No hand detected')
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+            frame = draw_landmarks_on_image(frame, landmarks)
+
+        cv2.imshow("Hand Detection", frame)
+        if cv2.waitKey(1) == 27:
             break
 
     cap.release()
