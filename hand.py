@@ -68,17 +68,17 @@ class Hand:
         self.filter.R *= 1e-1
         self.filter.P *= 1e-1
         if enable_smoothing:
-            self.filter.Q *= 5e-3
+            self.filter.Q *= 3e-3
         else:
             self.filter.Q *= 1
         self.previous_pointer_location = (0, 0)
         self.is_missing = True
         self._last_update = 0
-        self._last_pointer_location = (0, 0)
+        self._last_index_tip_location = (0, 0)
         self._last_click_event = time.time()
 
     def allow_click(self):
-        if time.time() - self._last_click_event > 1.:
+        if time.time() - self._last_click_event > 2.:
             self._last_click_event = time.time()
             return True
         return False
@@ -86,8 +86,13 @@ class Hand:
     @property
     def coordinates(self) -> Optional[np.ndarray]:
         if not self.is_missing:
-            self.filter.predict()
             return self.filter.x.reshape(-1, self.axis_dim)
+        return None
+
+    @property
+    def coordinates_2d(self):
+        if not self.is_missing:
+            return self.filter.x.reshape(-1, self.axis_dim)[:, :2]
         return None
 
     def do_action(self, disable_clicks: bool = False):
@@ -96,14 +101,15 @@ class Hand:
             return
         if self.are_these_straight(fingers=INDEX_FINGER):
             # calculate the difference between the current and the last pointer location
-            pointer_location = self.coordinates_of(HandLandmark.INDEX_FINGER_TIP)
-            delta_x = (pointer_location[0] - self._last_pointer_location[0]) * SCREEN_WIDTH
-            delta_y = (pointer_location[1] - self._last_pointer_location[1]) * SCREEN_HEIGHT
-            delta_x = int(delta_x)
-            delta_y = int(delta_y)
+            index_tip_location = self.coordinates_of(HandLandmark.INDEX_FINGER_TIP)
+            delta_x = (index_tip_location[0] - self._last_index_tip_location[0]) * SCREEN_WIDTH
+            delta_y = (index_tip_location[1] - self._last_index_tip_location[1]) * SCREEN_HEIGHT
+            current_pointer_location = pyautogui.position()
+            new_x, new_y = int(current_pointer_location.x + delta_x), int(current_pointer_location.y + delta_y)
+            print(new_x, new_y)
             match closest := self.get_closest_finger_to_thumb():
                 case None:
-                    pyautogui.moveRel(delta_x, delta_y, duration=0.01, _pause=False)
+                    pyautogui.moveTo(new_x, new_y, duration=0.01, _pause=False)
                     print('Moving mouse')
                 # case HandLandmark.INDEX_FINGER_TIP:
                 #     if self.allow_click():
@@ -111,24 +117,24 @@ class Hand:
                 #     print('Scrolling')
                 case HandLandmark.MIDDLE_FINGER_TIP:
                     if not disable_clicks:
-                        pyautogui.dragRel(delta_x, delta_y, _pause=False)
+                        pyautogui.dragTo(new_x, new_x, _pause=False)
                     print('Dragging')
                 case HandLandmark.RING_FINGER_TIP:
                     if self.allow_click() and not disable_clicks:
-                        pyautogui.click(_pause=False)
+                        pyautogui.click(new_x, new_x, _pause=False)
                     print('Clicking')
                 case HandLandmark.PINKY_TIP:
                     if self.allow_click() and not disable_clicks:
-                        pyautogui.rightClick(_pause=False)
+                        pyautogui.rightClick(new_x, new_x, _pause=False)
                     print('Right clicking')
                 case _:
                     print('Unknown finger, wtf?', closest)
-            self._last_pointer_location = self.coordinates_of(HandLandmark.INDEX_FINGER_TIP)
+            self._last_index_tip_location = index_tip_location
 
     def update(self, data: Optional[np.ndarray]):
         if data is None:
             self._last_update += 1
-            if self._last_update > 30:
+            if self._last_update > 15:
                 self.is_missing = True
             return None
         self.is_missing = False
@@ -137,9 +143,10 @@ class Hand:
         if data.ndim > 1:
             data = data.flatten()
         self.filter.update(data)
+        self.filter.predict()
 
-    def coordinates_of(self, part: HandLandmark) -> np.ndarray:
-        return self.filter.x.reshape(-1, self.axis_dim)[part]
+    def coordinates_of(self, part: HandLandmark) -> Optional[np.ndarray]:
+        return self.coordinates[part] if not self.is_missing else None
 
     def get_dist_between(self, part1: HandLandmark, part2: HandLandmark) -> float:
         return np.linalg.norm(self.coordinates_of(part1) - self.coordinates_of(part2))
@@ -161,11 +168,15 @@ class Hand:
         angle_p3 = angle_between_vectors(p3 - p2, p4 - p2)
         return angle_p2, angle_p3
 
-    def are_these_straight(self, *, fingers: list[HandLandmark], threshold: float = 25.) -> bool:
+    def are_these_straight(self, *, fingers: list[HandLandmark], threshold_angle: float = 25.) -> bool:
+        if self.is_missing:
+            return False
         angles = self.finger_angles(fingers)
-        return all(angle < threshold for angle in angles)
+        return all(angle < threshold_angle for angle in angles)
 
-    def get_closest_finger_to_thumb(self, threshold: float = 7e-2) -> Optional[HandLandmark]:
+    def get_closest_finger_to_thumb(self, threshold: float = 4e-2) -> Optional[HandLandmark]:
+        if self.is_missing:
+            return None
         thumb = HandLandmark.THUMB_TIP
         closest = min(
             (finger for finger in HandLandmark if (finger.name.endswith('TIP') and finger != thumb)),

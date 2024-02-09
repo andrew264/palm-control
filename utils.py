@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 from filterpy.kalman import KalmanFilter
 
@@ -57,3 +58,24 @@ class KalmanFilterObj:
             self.filter.predict()
             return self.filter.x
         return self.filter.x
+
+
+def draw_landmarks_on_image(_img: np.ndarray, _points: np.ndarray):
+    _points = _rescale_landmarks(_points, *_img.shape[:2])
+    colors = [(0, 0, 0), (255, 255, 255)]
+
+    def draw_line(_start, _end, thickness):
+        cv2.line(_img, tuple(_start), tuple(_end), colors[0], thickness + 4)
+        cv2.line(_img, tuple(_start), tuple(_end), colors[1], thickness)
+
+    def draw_circle(center, radius, thickness):
+        cv2.circle(_img, tuple(center), radius + 3, colors[0], -1)
+        cv2.circle(_img, tuple(center), radius, colors[1], thickness)
+
+    for start, end in HAND_CONNECTIONS:
+        draw_line(_points[start], _points[end], 6)
+
+    for index in range(len(_points)):
+        draw_circle(_points[index], 5, 1)
+
+    return _img

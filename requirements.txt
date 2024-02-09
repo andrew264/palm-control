@@ -4,3 +4,4 @@ requests
 filterpy
 numpy
 pyautogui
+mediapipe

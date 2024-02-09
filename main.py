@@ -8,7 +8,7 @@ from mmpose.apis import init_model, inference_topdown
 from torch import nn
 
 from hand import Hand
-from utils import HAND_CONNECTIONS, _rescale_landmarks, KalmanFilterObj
+from utils import KalmanFilterObj, draw_landmarks_on_image
 from yolo import YOLO
 
 hand = Hand(enable_smoothing=True)
@@ -97,27 +97,6 @@ def do_hand_tracking():
         hand.update(landmarks)
 
 
-def draw_landmarks_on_image(_img: np.ndarray, _points: np.ndarray):
-    _points = _rescale_landmarks(_points, *_img.shape[:2])
-    colors = [(0, 0, 0), (255, 255, 255)]
-
-    def draw_line(_start, _end, thickness):
-        cv2.line(_img, tuple(_start), tuple(_end), colors[0], thickness + 4)
-        cv2.line(_img, tuple(_start), tuple(_end), colors[1], thickness)
-
-    def draw_circle(center, radius, thickness):
-        cv2.circle(_img, tuple(center), radius + 3, colors[0], -1)
-        cv2.circle(_img, tuple(center), radius, colors[1], thickness)
-
-    for start, end in HAND_CONNECTIONS:
-        draw_line(_points[start], _points[end], 6)
-
-    for index in range(len(_points)):
-        draw_circle(_points[index], 5 if index < 13 else 8, 1)
-
-    return _img
-
-
 if __name__ == '__main__':
     # do_hand_tracking()
     print("Starting hand tracking thread")
@@ -132,7 +111,7 @@ if __name__ == '__main__':
         img = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)
         if not hand.is_missing:
             img = draw_landmarks_on_image(img, hand.coordinates)
-            hand.do_action(disable_clicks=False)
+            hand.do_action(disable_clicks=True)
         fps = 1 / (time.time() - t)
         cv2.putText(img, f'FPS: {fps:.2f}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
