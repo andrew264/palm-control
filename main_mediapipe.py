@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 
@@ -6,6 +7,7 @@ import mediapipe as mp
 import numpy as np
 import pyautogui
 from mediapipe.tasks import python
+import psutil
 
 from gesture_detector import GestureDetector
 from hand import Hand
@@ -29,6 +31,13 @@ is_mouse_dragging = False
 last_click_time = time.time()
 
 
+def set_high_priority():
+    p = psutil.Process()
+    if os.name == 'nt':
+        p.nice(psutil.HIGH_PRIORITY_CLASS)
+        print("Set high priority")
+
+
 def allow_click():
     global last_click_time
     if time.time() - last_click_time > 1.0:
@@ -39,16 +48,14 @@ def allow_click():
 
 def enable_mouse_drag():
     global is_mouse_dragging
-    if not is_mouse_dragging:
-        is_mouse_dragging = True
-        pyautogui.mouseDown(_pause=False)
+    is_mouse_dragging = True
+    pyautogui.mouseDown(_pause=False)
 
 
 def disable_mouse_drag():
     global is_mouse_dragging
-    if is_mouse_dragging:
-        is_mouse_dragging = False
-        pyautogui.mouseUp(_pause=False)
+    is_mouse_dragging = False
+    pyautogui.mouseUp(_pause=False)
 
 
 def load_model():
@@ -102,12 +109,12 @@ def do_mouse_movement(x, y):
 
     prevX = prevX + (x - prevX) / smoothening
     prevY = prevY + (y - prevY) / smoothening
-    print(prevX, prevY)
 
     pyautogui.moveTo(prevX, prevY, _pause=False)
 
 
 if __name__ == '__main__':
+    set_high_priority()
     print("Starting hand tracking thread")
     threading.Thread(target=start_tracking, daemon=True, name="Tracking-Thread").start()
     print("Waiting for hand tracking to start...")
@@ -123,31 +130,31 @@ if __name__ == '__main__':
             coordinates = hand.coordinates_2d
             match event := gesture_detector.detect():
                 case HandEvent.MOUSE_DRAG:
-                    enable_mouse_drag()
+                    if not is_mouse_dragging:
+                        enable_mouse_drag()
                     coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
                     do_mouse_movement(*coords)
-                    print("Mouse drag")
                 case HandEvent.MOUSE_CLICK:
-                    disable_mouse_drag()
+                    if is_mouse_dragging:
+                        disable_mouse_drag()
                     if allow_click():
                         pyautogui.click(_pause=False)
-                        print("Mouse click")
                 case HandEvent.MOUSE_RIGHT_CLICK:
-                    disable_mouse_drag()
+                    if is_mouse_dragging:
+                        disable_mouse_drag()
                     if allow_click():
                         pyautogui.rightClick(_pause=False)
-                        print("Mouse right click")
                 case HandEvent.AUDIO_INPUT:
-                    disable_mouse_drag()
-                    print("Audio input")
+                    if is_mouse_dragging:
+                        disable_mouse_drag()
                 case HandEvent.MOUSE_MOVE:
-                    disable_mouse_drag()
+                    if is_mouse_dragging:
+                        disable_mouse_drag()
                     coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
                     do_mouse_movement(*coords)
-                    print("Mouse move")
                 case HandEvent.MOUSE_NO_EVENT:
-                    disable_mouse_drag()
-                    print("No event")
+                    if is_mouse_dragging:
+                        disable_mouse_drag()
 
             fps = 1 / (time.time() - t)
             if coordinates is not None:
