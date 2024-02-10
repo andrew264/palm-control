@@ -5,9 +5,9 @@ import time
 import cv2
 import mediapipe as mp
 import numpy as np
+import psutil
 import pyautogui
 from mediapipe.tasks import python
-import psutil
 
 from gesture_detector import GestureDetector
 from hand import Hand
@@ -128,33 +128,29 @@ if __name__ == '__main__':
         img = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)
         if not hand.is_missing:
             coordinates = hand.coordinates_2d
-            match event := gesture_detector.detect():
+            event = gesture_detector.detect()
+            if event != HandEvent.MOUSE_DRAG and is_mouse_dragging:
+                disable_mouse_drag()
+            match event:
                 case HandEvent.MOUSE_DRAG:
                     if not is_mouse_dragging:
                         enable_mouse_drag()
                     coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
                     do_mouse_movement(*coords)
                 case HandEvent.MOUSE_CLICK:
-                    if is_mouse_dragging:
-                        disable_mouse_drag()
                     if allow_click():
                         pyautogui.click(_pause=False)
                 case HandEvent.MOUSE_RIGHT_CLICK:
-                    if is_mouse_dragging:
-                        disable_mouse_drag()
                     if allow_click():
                         pyautogui.rightClick(_pause=False)
                 case HandEvent.AUDIO_INPUT:
-                    if is_mouse_dragging:
-                        disable_mouse_drag()
+                    # TODO: Add audio input event
+                    pass
                 case HandEvent.MOUSE_MOVE:
-                    if is_mouse_dragging:
-                        disable_mouse_drag()
                     coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
                     do_mouse_movement(*coords)
                 case HandEvent.MOUSE_NO_EVENT:
-                    if is_mouse_dragging:
-                        disable_mouse_drag()
+                    pass
 
             fps = 1 / (time.time() - t)
             if coordinates is not None:

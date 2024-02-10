@@ -27,22 +27,20 @@ INDEX_FINGER: list[HandLandmark] = [HandLandmark.INDEX_FINGER_TIP, HandLandmark.
 class GestureDetector:
     def __init__(self, hand: Hand):
         self.hand = hand
-        self.current_event = None
 
     def detect(self) -> HandEvent:
         if self.is_event_drag():
-            self.current_event = HandEvent.MOUSE_DRAG
+            return HandEvent.MOUSE_DRAG
         elif self.is_event_click():
-            self.current_event = HandEvent.MOUSE_CLICK
+            return HandEvent.MOUSE_CLICK
         elif self.is_event_right_click():
-            self.current_event = HandEvent.MOUSE_RIGHT_CLICK
+            return HandEvent.MOUSE_RIGHT_CLICK
         elif self.is_event_audio_input():
-            self.current_event = HandEvent.AUDIO_INPUT
+            return HandEvent.AUDIO_INPUT
         elif self.is_event_move():
-            self.current_event = HandEvent.MOUSE_MOVE
+            return HandEvent.MOUSE_MOVE
         else:
-            self.current_event = HandEvent.MOUSE_NO_EVENT
-        return self.current_event
+            return HandEvent.MOUSE_NO_EVENT
 
     def _is_index_finger_extended(self, threshold_angle: float = 10.) -> bool:
         """
