@@ -7,7 +7,7 @@ pointer using the palm and fingers.
 
 - [x] use `mediapipe` to get hand cords (easy)
 - [x] use `Kalman filtering` to smooth the outputs (kinda easy)
-- [x] map them fingers to mouse cursor movements (the hard part) kainda meh
-- [ ] map clicks and drags (why is this so hard)
-- [ ] using something like a time-series model to find future outputs (high polling rate) ?? (Should be doable?)
+- [x] map them fingers to mouse cursor movements (the hard part) its okay for now
+- [x] map clicks and drags to the fingers (easy)
+- [ ] speech to text (for typing) (hard)
 - [ ] profit ??

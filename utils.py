@@ -1,24 +1,9 @@
 import cv2
 import numpy as np
-from filterpy.kalman import KalmanFilter
+from mediapipe import solutions
+from mediapipe.framework.formats import landmark_pb2
 
-HAND_PALM_CONNECTIONS = ((0, 1), (0, 5), (9, 13), (13, 17), (5, 9), (0, 17))
-
-HAND_THUMB_CONNECTIONS = ((1, 2), (2, 3), (3, 4))
-
-HAND_INDEX_FINGER_CONNECTIONS = ((5, 6), (6, 7), (7, 8))
-
-HAND_MIDDLE_FINGER_CONNECTIONS = ((9, 10), (10, 11), (11, 12))
-
-HAND_RING_FINGER_CONNECTIONS = ((13, 14), (14, 15), (15, 16))
-
-HAND_PINKY_FINGER_CONNECTIONS = ((17, 18), (18, 19), (19, 20))
-
-HAND_CONNECTIONS = frozenset().union(*[
-    HAND_PALM_CONNECTIONS, HAND_THUMB_CONNECTIONS,
-    HAND_INDEX_FINGER_CONNECTIONS, HAND_MIDDLE_FINGER_CONNECTIONS,
-    HAND_RING_FINGER_CONNECTIONS, HAND_PINKY_FINGER_CONNECTIONS
-])
+from typin import HAND_CONNECTIONS
 
 
 def _landmarks_list_to_array(landmark_list) -> np.ndarray:
@@ -26,38 +11,7 @@ def _landmarks_list_to_array(landmark_list) -> np.ndarray:
 
 
 def _rescale_landmarks(landmarks: np.ndarray, height: int, width: int) -> list:
-    return [[int(point[0] * height), int(point[1] * width)] for point in landmarks]
-
-
-class KalmanFilterObj:
-    def __init__(self, size: int, enable_smoothing: bool = False):
-        self.enable_smoothing = enable_smoothing
-        self.filter = KalmanFilter(dim_x=size, dim_z=size)
-        self.filter.F = np.eye(size)
-        self.filter.H = np.eye(size)
-        self.filter.x = np.zeros(size)
-        self.filter.P = np.eye(size) * 1000
-        self.filter.R *= 1e-1
-        self.filter.Q *= 5e-2
-        self.is_missing = True
-        self._last_update = 0
-
-    def update(self, data: np.ndarray) -> np.ndarray:
-        if data is None:
-            self._last_update += 1
-            if self._last_update > 10:
-                self.is_missing = True
-        self.is_missing = False
-        if self.enable_smoothing:
-            self.filter.update(data)
-            return self.filter.x
-        return data
-
-    def predict(self) -> np.ndarray:
-        if self.enable_smoothing:
-            self.filter.predict()
-            return self.filter.x
-        return self.filter.x
+    return [[int(point[0] * width), int(point[1] * height)] for point in landmarks]
 
 
 def draw_landmarks_on_image(_img: np.ndarray, _points: np.ndarray):
@@ -79,3 +33,44 @@ def draw_landmarks_on_image(_img: np.ndarray, _points: np.ndarray):
         draw_circle(_points[index], 5, 1)
 
     return _img
+
+
+def draw_mp_landmarks_on_image(rgb_image, detection_result):
+    MARGIN = 10  # pixels
+    FONT_SIZE = 1
+    FONT_THICKNESS = 1
+    HANDEDNESS_TEXT_COLOR = (88, 205, 54)  # vibrant green
+    hand_landmarks_list = detection_result.hand_landmarks
+    handedness_list = detection_result.handedness
+    annotated_image = np.copy(rgb_image)
+
+    # Loop through the detected hands to visualize.
+    for idx in range(len(hand_landmarks_list)):
+        hand_landmarks = hand_landmarks_list[idx]
+        handedness = handedness_list[idx]
+
+        # Draw the hand landmarks.
+        hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
+        hand_landmarks_proto.landmark.extend([
+            landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z) for landmark in hand_landmarks
+        ])
+        solutions.drawing_utils.draw_landmarks(
+            annotated_image,
+            hand_landmarks_proto,
+            solutions.hands.HAND_CONNECTIONS,
+            solutions.drawing_styles.get_default_hand_landmarks_style(),
+            solutions.drawing_styles.get_default_hand_connections_style())
+
+        # Get the top left corner of the detected hand's bounding box.
+        height, width, _ = annotated_image.shape
+        x_coordinates = [landmark.x for landmark in hand_landmarks]
+        y_coordinates = [landmark.y for landmark in hand_landmarks]
+        text_x = int(min(x_coordinates) * width)
+        text_y = int(min(y_coordinates) * height) - MARGIN
+
+        # Draw handedness (left or right hand) on the image.
+        cv2.putText(annotated_image, f"{handedness[0].category_name}",
+                    (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
+                    FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
+
+    return annotated_image

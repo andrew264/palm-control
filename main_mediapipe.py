@@ -4,21 +4,51 @@ import time
 import cv2
 import mediapipe as mp
 import numpy as np
-from mediapipe import solutions
-from mediapipe.framework.formats import landmark_pb2
+import pyautogui
 from mediapipe.tasks import python
 
+from gesture_detector import GestureDetector
 from hand import Hand
-from utils import draw_landmarks_on_image
+from typin import HandEvent, HandLandmark
+from utils import draw_landmarks_on_image, draw_mp_landmarks_on_image
 
-hand = Hand(enable_smoothing=False, axis_dim=3)
+hand = Hand(enable_smoothing=True, axis_dim=3)
 NUM_HANDS = 1
-CAMERA_WIDTH = 1920
-CAMERA_HEIGHT = 1080
+CAMERA_WIDTH = 1280
+CAMERA_HEIGHT = 720
 cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FPS, 30)
+cap.set(cv2.CAP_PROP_FPS, 60)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+
+prevX, prevY = 0, 0
+smoothening = 6
+SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
+pyautogui.FAILSAFE = False
+is_mouse_dragging = False
+last_click_time = time.time()
+
+
+def allow_click():
+    global last_click_time
+    if time.time() - last_click_time > 1.0:
+        last_click_time = time.time()
+        return True
+    return False
+
+
+def enable_mouse_drag():
+    global is_mouse_dragging
+    if not is_mouse_dragging:
+        is_mouse_dragging = True
+        pyautogui.mouseDown(_pause=False)
+
+
+def disable_mouse_drag():
+    global is_mouse_dragging
+    if is_mouse_dragging:
+        is_mouse_dragging = False
+        pyautogui.mouseUp(_pause=False)
 
 
 def load_model():
@@ -35,48 +65,7 @@ def load_model():
     return detector
 
 
-def draw_mp_landmarks_on_image(rgb_image, detection_result):
-    MARGIN = 10  # pixels
-    FONT_SIZE = 1
-    FONT_THICKNESS = 1
-    HANDEDNESS_TEXT_COLOR = (88, 205, 54)  # vibrant green
-    hand_landmarks_list = detection_result.hand_landmarks
-    handedness_list = detection_result.handedness
-    annotated_image = np.copy(rgb_image)
-
-    # Loop through the detected hands to visualize.
-    for idx in range(len(hand_landmarks_list)):
-        hand_landmarks = hand_landmarks_list[idx]
-        handedness = handedness_list[idx]
-
-        # Draw the hand landmarks.
-        hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
-        hand_landmarks_proto.landmark.extend([
-            landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z) for landmark in hand_landmarks
-        ])
-        solutions.drawing_utils.draw_landmarks(
-            annotated_image,
-            hand_landmarks_proto,
-            solutions.hands.HAND_CONNECTIONS,
-            solutions.drawing_styles.get_default_hand_landmarks_style(),
-            solutions.drawing_styles.get_default_hand_connections_style())
-
-        # Get the top left corner of the detected hand's bounding box.
-        height, width, _ = annotated_image.shape
-        x_coordinates = [landmark.x for landmark in hand_landmarks]
-        y_coordinates = [landmark.y for landmark in hand_landmarks]
-        text_x = int(min(x_coordinates) * width)
-        text_y = int(min(y_coordinates) * height) - MARGIN
-
-        # Draw handedness (left or right hand) on the image.
-        cv2.putText(annotated_image, f"{handedness[0].category_name}",
-                    (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
-                    FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
-
-    return annotated_image
-
-
-def do_tracking(show_window: bool = False):
+def start_tracking(show_window: bool = False):
     detector = load_model()
     frame_timestamp_ms = 0
 
@@ -100,12 +89,31 @@ def do_tracking(show_window: bool = False):
             hand.update(None)
 
 
+def do_mouse_movement(x, y):
+    global prevX, prevY
+    x, y = x * CAMERA_WIDTH, y * CAMERA_HEIGHT
+    x = np.interp(x, (300, CAMERA_WIDTH - 300), (0, SCREEN_WIDTH))
+    y = np.interp(y, (200, CAMERA_HEIGHT - 200), (0, SCREEN_HEIGHT))
+
+    if x > SCREEN_WIDTH:
+        x = SCREEN_WIDTH
+    if y > SCREEN_HEIGHT:
+        y = SCREEN_HEIGHT
+
+    prevX = prevX + (x - prevX) / smoothening
+    prevY = prevY + (y - prevY) / smoothening
+    print(prevX, prevY)
+
+    pyautogui.moveTo(prevX, prevY, _pause=False)
+
+
 if __name__ == '__main__':
     print("Starting hand tracking thread")
-    threading.Thread(target=do_tracking, daemon=True, name="Tracking-Thread").start()
+    threading.Thread(target=start_tracking, daemon=True, name="Tracking-Thread").start()
     print("Waiting for hand tracking to start...")
     while hand.is_missing:
         time.sleep(0.5)
+    gesture_detector = GestureDetector(hand)
     print("Starting main loop")
     while True:
         t = time.time()
@@ -113,12 +121,38 @@ if __name__ == '__main__':
         img = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)
         if not hand.is_missing:
             coordinates = hand.coordinates_2d
+            match event := gesture_detector.detect():
+                case HandEvent.MOUSE_DRAG:
+                    enable_mouse_drag()
+                    coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
+                    do_mouse_movement(*coords)
+                    print("Mouse drag")
+                case HandEvent.MOUSE_CLICK:
+                    disable_mouse_drag()
+                    if allow_click():
+                        pyautogui.click(_pause=False)
+                        print("Mouse click")
+                case HandEvent.MOUSE_RIGHT_CLICK:
+                    disable_mouse_drag()
+                    if allow_click():
+                        pyautogui.rightClick(_pause=False)
+                        print("Mouse right click")
+                case HandEvent.AUDIO_INPUT:
+                    disable_mouse_drag()
+                    print("Audio input")
+                case HandEvent.MOUSE_MOVE:
+                    disable_mouse_drag()
+                    coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
+                    do_mouse_movement(*coords)
+                    print("Mouse move")
+                case HandEvent.MOUSE_NO_EVENT:
+                    disable_mouse_drag()
+                    print("No event")
+
+            fps = 1 / (time.time() - t)
             if coordinates is not None:
                 img = draw_landmarks_on_image(img, coordinates)
-            hand.do_action(disable_clicks=False)
-        fps = 1 / (time.time() - t)
         cv2.putText(img, f'FPS: {fps:.2f}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-
         cv2.imshow('Hand Tracking', img)
         if cv2.waitKey(1) == 27:
             break
