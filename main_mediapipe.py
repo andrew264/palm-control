@@ -100,7 +100,7 @@ def do_mouse_movement(x, y):
     global prevX, prevY
     x, y = x * CAMERA_WIDTH, y * CAMERA_HEIGHT
     x = np.interp(x, (300, CAMERA_WIDTH - 300), (0, SCREEN_WIDTH))
-    y = np.interp(y, (200, CAMERA_HEIGHT - 200), (0, SCREEN_HEIGHT))
+    y = np.interp(y, (400, CAMERA_HEIGHT - 50), (0, SCREEN_HEIGHT))
 
     if x > SCREEN_WIDTH:
         x = SCREEN_WIDTH
@@ -156,6 +156,7 @@ if __name__ == '__main__':
             if coordinates is not None:
                 img = draw_landmarks_on_image(img, coordinates)
         cv2.putText(img, f'FPS: {fps:.2f}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(img, f'Event: {event.name}', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
         cv2.imshow('Hand Tracking', img)
         if cv2.waitKey(1) == 27:
             break

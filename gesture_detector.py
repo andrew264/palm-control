@@ -70,14 +70,14 @@ class GestureDetector:
                                                                HandLandmark.MIDDLE_FINGER_TIP)
         return distance_between_thumb_index < threshold and distance_between_index_middle < threshold
 
-    def _is_thumb_middle_touching(self, threshold: float = 5e-2) -> bool:
+    def _is_thumb_middle_touching(self, threshold: float = 3e-2) -> bool:
         """
         Determines if the thumb and middle fingers are touching.
         """
         distance_between_thumb_middle = self._distance_between(HandLandmark.THUMB_TIP, HandLandmark.MIDDLE_FINGER_TIP)
         return distance_between_thumb_middle < threshold
 
-    def _is_thumb_middle_pip_touching(self, threshold: float = 5e-2) -> bool:
+    def _is_thumb_middle_pip_touching(self, threshold: float = 3e-2) -> bool:
         """
         Determines if the thumb and index fingers are touching at the PIP joint.
         """
@@ -85,14 +85,14 @@ class GestureDetector:
                                                                   HandLandmark.MIDDLE_FINGER_PIP)
         return distance_between_thumb_index_pip < threshold
 
-    def _is_thumb_ring_touching(self, threshold: float = 5e-2) -> bool:
+    def _is_thumb_ring_touching(self, threshold: float = 3e-2) -> bool:
         """
         Determines if the thumb and ring fingers are touching.
         """
         distance_between_thumb_ring = self._distance_between(HandLandmark.THUMB_TIP, HandLandmark.RING_FINGER_TIP)
         return distance_between_thumb_ring < threshold
 
-    def _is_thumb_pinky_touching(self, threshold: float = 5e-2) -> bool:
+    def _is_thumb_pinky_touching(self, threshold: float = 3e-2) -> bool:
         """
         Determines if the thumb and pinky fingers are touching.
         """

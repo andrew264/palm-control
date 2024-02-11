@@ -13,13 +13,14 @@ class Hand:
         self.num_landmarks = num_landmarks
         self.enable_smoothing = enable_smoothing
         self.filter = KalmanFilter(dim_x=size, dim_z=size)
+
         self.filter.F = np.eye(size)
         self.filter.H = np.eye(size)
         self.filter.x = np.zeros((size, 1))
         self.filter.R *= 1e-1
         self.filter.P *= 1e-1
         if enable_smoothing:
-            self.filter.Q *= 1e-1
+            self.filter.Q *= 5e-2
         else:
             self.filter.Q *= 1
         self.is_missing = True
