@@ -3,3 +3,8 @@ opencv-python
 filterpy
 numpy
 pyautogui
+SpeechRecognition
+pyaudio
+openai-whisper
+soundfile
+psutil

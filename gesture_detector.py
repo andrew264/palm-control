@@ -92,7 +92,7 @@ class GestureDetector:
         distance_between_thumb_ring = self._distance_between(HandLandmark.THUMB_TIP, HandLandmark.RING_FINGER_TIP)
         return distance_between_thumb_ring < threshold
 
-    def _is_thumb_pinky_touching(self, threshold: float = 3e-2) -> bool:
+    def _is_thumb_pinky_touching(self, threshold: float = 5e-2) -> bool:
         """
         Determines if the thumb and pinky fingers are touching.
         """

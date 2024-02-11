@@ -19,5 +19,5 @@ Download [MODEL LINK](https://storage.googleapis.com/mediapipe-models/hand_landm
 - [x] use `Kalman filtering` to smooth the outputs (kinda easy)
 - [x] map them fingers to mouse cursor movements (the hard part) its okay for now
 - [x] map clicks and drags to the fingers (easy)
-- [ ] speech to text (for typing) (hard)
+- [x] speech to text (for typing) (hard) (it kainda works; if pyautogui works)
 - [ ] profit ??

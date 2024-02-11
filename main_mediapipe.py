@@ -7,10 +7,12 @@ import mediapipe as mp
 import numpy as np
 import psutil
 import pyautogui
+import whisper
 from mediapipe.tasks import python
 
 from gesture_detector import GestureDetector
 from hand import Hand
+from speech import SpeechThread
 from typin import HandEvent, HandLandmark
 from utils import draw_landmarks_on_image, draw_mp_landmarks_on_image
 
@@ -29,6 +31,9 @@ SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 pyautogui.FAILSAFE = False
 is_mouse_dragging = False
 last_click_time = time.time()
+
+audio_model_name = "small.en"
+audio_model = whisper.load_model(name=audio_model_name, device="cuda")
 
 
 def set_high_priority():
@@ -110,13 +115,14 @@ def do_mouse_movement(x, y):
     prevX = prevX + (x - prevX) / smoothening
     prevY = prevY + (y - prevY) / smoothening
 
-    pyautogui.moveTo(prevX, prevY, _pause=False)
+    pyautogui.moveTo(prevX, prevY, _pause=False, tween=pyautogui.easeOutQuad)
 
 
 if __name__ == '__main__':
     set_high_priority()
     print("Starting hand tracking thread")
     threading.Thread(target=start_tracking, daemon=True, name="Tracking-Thread").start()
+    audio_thread = SpeechThread(model=audio_model, model_name=audio_model_name)
     print("Waiting for hand tracking to start...")
     while hand.is_missing:
         time.sleep(0.5)
@@ -144,8 +150,13 @@ if __name__ == '__main__':
                     if allow_click():
                         pyautogui.rightClick(_pause=False)
                 case HandEvent.AUDIO_INPUT:
-                    # TODO: Add audio input event
-                    pass
+                    if audio_thread.is_running:
+                        pass
+                    elif not audio_thread.is_running and not audio_thread.finished:
+                        audio_thread.start()
+                    elif audio_thread.finished:
+                        audio_thread = SpeechThread(model=audio_model, model_name=audio_model_name)
+                        audio_thread.start()
                 case HandEvent.MOUSE_MOVE:
                     coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
                     do_mouse_movement(*coords)
