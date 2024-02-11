@@ -46,7 +46,10 @@ class GestureDetector:
         """
         Determines if the index finger is extended.
         """
-        p1, p2, p3, p4 = self.hand.coordinates_of(INDEX_FINGER)
+        points = self.hand.coordinates_of(INDEX_FINGER)
+        if points is None:
+            return False
+        p1, p2, p3, p4 = points
         angle_p2 = angle_between_vectors(p2 - p1, p3 - p1)
         angle_p3 = angle_between_vectors(p3 - p2, p4 - p2)
         return angle_p2 < threshold_angle and angle_p3 < threshold_angle

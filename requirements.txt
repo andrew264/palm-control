@@ -8,3 +8,4 @@ pyaudio
 openai-whisper
 soundfile
 psutil
+chime
