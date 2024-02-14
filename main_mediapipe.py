@@ -26,7 +26,6 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
 
 prevX, prevY = 0, 0
-smoothening = 6
 SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 pyautogui.FAILSAFE = False
 is_mouse_dragging = False
@@ -54,13 +53,13 @@ def allow_click():
 def enable_mouse_drag():
     global is_mouse_dragging
     is_mouse_dragging = True
-    pyautogui.mouseDown(_pause=False)
+    pyautogui.mouseDown(button='left', _pause=False)
 
 
 def disable_mouse_drag():
     global is_mouse_dragging
     is_mouse_dragging = False
-    pyautogui.mouseUp(_pause=False)
+    pyautogui.mouseUp(button='left', _pause=False)
 
 
 def load_model():
@@ -102,6 +101,7 @@ def start_tracking(show_window: bool = False):
 
 
 def do_mouse_movement(x, y):
+    alpha = 0.7
     global prevX, prevY
     x, y = x * CAMERA_WIDTH, y * CAMERA_HEIGHT
     x = np.interp(x, (300, CAMERA_WIDTH - 300), (0, SCREEN_WIDTH))
@@ -112,10 +112,10 @@ def do_mouse_movement(x, y):
     if y > SCREEN_HEIGHT:
         y = SCREEN_HEIGHT
 
-    prevX = prevX + (x - prevX) / smoothening
-    prevY = prevY + (y - prevY) / smoothening
+    prevX = alpha * prevX + (1 - alpha) * x
+    prevY = alpha * prevY + (1 - alpha) * y
 
-    pyautogui.moveTo(prevX, prevY, _pause=False, tween=pyautogui.easeOutQuad)
+    pyautogui.moveTo(prevX, prevY, duration=0.01, _pause=False)
 
 
 if __name__ == '__main__':
@@ -130,7 +130,6 @@ if __name__ == '__main__':
     print("Starting main loop")
     while True:
         t = time.time()
-        time.sleep(1 / 120)
         img = np.zeros((CAMERA_HEIGHT, CAMERA_WIDTH, 3), dtype=np.uint8)
         if not hand.is_missing:
             coordinates = hand.coordinates_2d
