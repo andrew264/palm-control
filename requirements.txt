@@ -9,3 +9,6 @@ openai-whisper
 soundfile
 psutil
 chime
+Pillow
+IPython
+jupyter
