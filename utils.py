@@ -74,3 +74,19 @@ def draw_mp_landmarks_on_image(rgb_image, detection_result):
                     FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
 
     return annotated_image
+
+
+def load_model(num_hands: int = 2, model_path: str = './models/hand_landmarker.task'):
+    import mediapipe as mp
+    from mediapipe.tasks import python
+    HandLandmarker = mp.tasks.vision.HandLandmarker
+    HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
+    VisionRunningMode = mp.tasks.vision.RunningMode
+    base_options = python.BaseOptions(model_asset_path=model_path)
+    options = HandLandmarkerOptions(
+        base_options=base_options,
+        running_mode=VisionRunningMode.VIDEO,
+        num_hands=num_hands,
+        min_tracking_confidence=0.3)
+    detector = HandLandmarker.create_from_options(options)
+    return detector

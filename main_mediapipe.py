@@ -8,13 +8,12 @@ import numpy as np
 import psutil
 import pyautogui
 import whisper
-from mediapipe.tasks import python
 
 from gesture_detector import GestureDetector
 from hand import Hand
 from speech import SpeechThread
 from typin import HandEvent, HandLandmark
-from utils import draw_landmarks_on_image, draw_mp_landmarks_on_image
+from utils import draw_landmarks_on_image, draw_mp_landmarks_on_image, load_model
 
 hand = Hand(enable_smoothing=True, axis_dim=3)
 NUM_HANDS = 1
@@ -62,22 +61,8 @@ def disable_mouse_drag():
     pyautogui.mouseUp(button='left', _pause=False)
 
 
-def load_model():
-    HandLandmarker = mp.tasks.vision.HandLandmarker
-    HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
-    VisionRunningMode = mp.tasks.vision.RunningMode
-    base_options = python.BaseOptions(model_asset_path='./models/hand_landmarker.task')
-    options = HandLandmarkerOptions(
-        base_options=base_options,
-        running_mode=VisionRunningMode.VIDEO,
-        num_hands=NUM_HANDS,
-        min_tracking_confidence=0.3)
-    detector = HandLandmarker.create_from_options(options)
-    return detector
-
-
 def start_tracking(show_window: bool = False):
-    detector = load_model()
+    detector = load_model(NUM_HANDS)
     frame_timestamp_ms = 0
 
     while cap.isOpened():

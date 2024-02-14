@@ -10,3 +10,6 @@
 
 # python cache
 *.pyc
+
+# dataset
+*.jsonl
