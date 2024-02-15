@@ -38,6 +38,9 @@ class Hand:
             return self.coordinates[:, :2]
         return None
 
+    def set_filterQ(self, value: float):
+        self.filter.Q = np.eye(self.filter.Q.shape[0]) * value
+
     def update(self, data: Optional[np.ndarray]):
         if data is None:
             self._last_update += 1

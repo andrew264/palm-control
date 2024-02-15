@@ -13,7 +13,7 @@ from gesture_detector import GestureDetector
 from hand import Hand
 from speech import SpeechThread
 from typin import HandEvent, HandLandmark
-from utils import draw_landmarks_on_image, draw_mp_landmarks_on_image, load_model
+from utils import draw_landmarks_on_image, load_model
 
 hand = Hand(enable_smoothing=True, axis_dim=3)
 NUM_HANDS = 1
@@ -61,7 +61,7 @@ def disable_mouse_drag():
     pyautogui.mouseUp(button='left', _pause=False)
 
 
-def start_tracking(show_window: bool = False):
+def start_tracking():
     detector = load_model(NUM_HANDS)
     frame_timestamp_ms = 0
 
@@ -73,10 +73,6 @@ def start_tracking(show_window: bool = False):
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
         results = detector.detect_for_video(mp_image, frame_timestamp_ms)
         frame_timestamp_ms += 1
-        if show_window:
-            cv2.imshow("Hand Tracking", draw_mp_landmarks_on_image(image, results))
-            if cv2.waitKey(1) == 27:
-                break
         hand_landmarks = results.hand_landmarks
         if hand_landmarks:
             np_landmarks = np.array([[landmark.x, landmark.y, landmark.z] for landmark in hand_landmarks[0]])
