@@ -1,5 +1,6 @@
 import time
 import tkinter as tk
+from tkinter import ttk
 
 import cv2
 import numpy as np
@@ -41,9 +42,14 @@ class GUI:
         self.root.bind("<Escape>", lambda e: self.on_close())
         self.root.config(bg="black")
 
+        self.style = ttk.Style(self.root)
+        self.style.theme_use("clam")
+
         self.tracking_image_label = None
         self.controls_frame = None
+        self.tracking_smoothness_label = None
         self.tracking_smoothness = None
+        self.mouse_smoothness_label = None
         self.mouse_smoothness = None
 
         self.last_click_time = time.time()
@@ -65,25 +71,38 @@ class GUI:
         self.root.destroy()
 
     def create_widgets(self):
-        self.tracking_image_label = tk.Label(self.root)
+        font = ("Roboto Mono", 12)
+        self.tracking_image_label = ttk.Label(self.root)
         self.tracking_image_label.pack()
 
-        self.controls_frame = tk.Frame(self.root)
+        self.controls_frame = ttk.Frame(self.root, padding=10)
         self.controls_frame.pack()
-        self.tracking_smoothness = tk.Scale(self.controls_frame, from_=1., to=1e-2,
-                                            resolution=1e-2,
-                                            orient=tk.HORIZONTAL,
-                                            label="Tracking Smoothness")
+
+        # Tracking Smoothness Section
+        tracking_frame = ttk.Frame(self.controls_frame)
+        tracking_frame.pack(fill="x", pady=(0, 10))
+
+        self.tracking_smoothness_label = ttk.Label(tracking_frame, text="Tracking Smoothness:", font=font)
+        self.tracking_smoothness_label.pack(side="left", padx=(0, 5))
+
+        self.tracking_smoothness = ttk.Scale(tracking_frame, from_=1., to=5e-3,
+                                             orient="horizontal", length=200)
         self.tracking_smoothness.set(DEFAULT_TRACKING_SMOOTHNESS)
         self.tracking_smoothness.config(command=self.update_tracking_smoothness)
-        self.tracking_smoothness.pack(side=tk.LEFT)
-        self.mouse_smoothness = tk.Scale(self.controls_frame, from_=0, to=1,
-                                         resolution=0.05,
-                                         orient=tk.HORIZONTAL,
-                                         label="Mouse Smoothness")
+        self.tracking_smoothness.pack(fill="x")
+
+        # Mouse Smoothness Section
+        mouse_frame = ttk.Frame(self.controls_frame)
+        mouse_frame.pack(fill="x")
+
+        self.mouse_smoothness_label = ttk.Label(mouse_frame, text="Mouse Smoothness:", font=font)
+        self.mouse_smoothness_label.pack(side="left", padx=(0, 5))
+
+        self.mouse_smoothness = ttk.Scale(mouse_frame, from_=0, to=1,
+                                          orient="horizontal", length=200)
         self.mouse_smoothness.set(DEFAULT_MOUSE_SMOOTHNESS)
         self.mouse_smoothness.config(command=self.update_mouse_smoothness)
-        self.mouse_smoothness.pack(side=tk.LEFT)
+        self.mouse_smoothness.pack(fill="x")
 
     def get_tracking_frame(self) -> np.ndarray:
         frame = EMPTY_FRAME.copy()
