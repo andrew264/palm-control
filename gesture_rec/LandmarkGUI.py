@@ -9,9 +9,12 @@ import mediapipe as mp
 import numpy as np
 from PIL import Image, ImageTk
 
+import sys
+sys.path.insert(0, '../')
+
 from utils import load_model, draw_landmarks_on_image
 
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 WIDTH, HEIGHT = 1280, 720
 FPS = 30
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
