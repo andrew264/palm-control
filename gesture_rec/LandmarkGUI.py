@@ -47,6 +47,10 @@ class VideoGUI:
         self.master.resizable(False, False)
         self.master.bind("<Escape>", lambda e: self.on_close())
 
+        self.master.bind("<space>", lambda e: self.capture_button_click())
+        self.master.bind("<BackSpace>", lambda e: self.undo_button_click())
+        self.master.bind("<Control-z>", lambda e: self.undo_button_click())
+
         self.master.config(bg="black")
 
         self.create_widgets(choices)
@@ -66,7 +70,7 @@ class VideoGUI:
         self.master.destroy()
 
     def create_widgets(self, choices: List[str]):
-        font = Font(family='Helvetica', size=20, weight='bold')
+        font = Font(family='Roboto Mono', size=14)
 
         self.image_label = tk.Label(self.master, anchor=tk.CENTER)
         self.image_label.pack()
@@ -88,6 +92,12 @@ class VideoGUI:
                                         command=self.capture_button_click,
                                         font=font, )
         self.capture_button.pack(side=tk.RIGHT)
+
+    @staticmethod
+    def undo_button_click():
+        if len(dataset_json) > 0:
+            dataset_json.pop()
+            print(f"Removed the last item from the dataset")
 
     def capture_button_click(self):
         if self.last_landmarks_and_choice is not None:
