@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tkinter as tk
 from tkinter.font import Font
 from typing import List, Optional
@@ -9,7 +10,6 @@ import mediapipe as mp
 import numpy as np
 from PIL import Image, ImageTk
 
-import sys
 sys.path.insert(0, '../')
 
 from utils import load_model, draw_landmarks_on_image
@@ -66,7 +66,7 @@ class VideoGUI:
         self.master.destroy()
 
     def create_widgets(self, choices: List[str]):
-        font = Font(family='Helvetica', size=36, weight='bold')
+        font = Font(family='Helvetica', size=20, weight='bold')
 
         self.image_label = tk.Label(self.master, anchor=tk.CENTER)
         self.image_label.pack()
