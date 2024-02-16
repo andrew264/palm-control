@@ -12,3 +12,4 @@ chime
 Pillow
 IPython
 jupyter
+torch
