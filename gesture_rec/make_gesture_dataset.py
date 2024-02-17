@@ -14,7 +14,7 @@ from PIL import Image, ImageTk
 
 sys.path.insert(0, '../')
 
-from utils import load_mediapipe_model, draw_landmarks_on_image, normalize_landmarks
+from utils import load_mediapipe_model, draw_landmarks_on_image, normalize_landmarks, get_gesture_class_labels
 
 cap = cv2.VideoCapture(0)
 WIDTH, HEIGHT = 1280, 720
@@ -156,9 +156,10 @@ class VideoGUI:
 
 
 if __name__ == '__main__':
-    with open('choices.txt') as f:
-        choices = f.read().splitlines()
-        choices.sort()
+    choices_file = "choices.txt"
+    if not os.path.exists(choices_file):
+        raise FileNotFoundError(f"File {choices_file} not found")
+    labels = get_gesture_class_labels(choices_file)
 
     model_save_path = "../models/gesture_model.pth"
     if not os.path.exists(model_save_path):
@@ -167,6 +168,6 @@ if __name__ == '__main__':
     else:
         from utils import load_gesture_model
 
-        gesture_model = load_gesture_model(model_save_path, len(choices))
-    video_gui = VideoGUI(choices=choices, gesture_model=gesture_model)
+        gesture_model = load_gesture_model(model_save_path, len(labels))
+    video_gui = VideoGUI(choices=labels, gesture_model=gesture_model)
     video_gui.master.mainloop()

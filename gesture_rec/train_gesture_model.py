@@ -49,17 +49,16 @@ def train_model(model, dataset, save_path, epochs=10, batch_size=32):
 
 
 if __name__ == "__main__":
-    # load and sort labels
     choices_file = "choices.txt"
     if not os.path.exists(choices_file):
         raise FileNotFoundError(f"File {choices_file} not found")
+    labels = get_gesture_class_labels(choices_file)
 
     dataset_file = "dataset.jsonl"
     if not os.path.exists(dataset_file):
         raise FileNotFoundError(f"File {dataset_file} not found")
 
     model_save_path = "../models/gesture_model.pth"
-    labels = get_gesture_class_labels(choices_file)
 
     # load dataset
     dataset = GestureDataset(file_path=dataset_file, labels=labels)
