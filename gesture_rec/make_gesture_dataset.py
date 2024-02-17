@@ -9,11 +9,12 @@ from typing import List, Optional
 import cv2
 import mediapipe as mp
 import numpy as np
+import torch
 from PIL import Image, ImageTk
 
 sys.path.insert(0, '../')
 
-from utils import load_mediapipe_model, draw_landmarks_on_image
+from utils import load_mediapipe_model, draw_landmarks_on_image, normalize_landmarks
 
 cap = cv2.VideoCapture(0)
 WIDTH, HEIGHT = 1280, 720
@@ -30,7 +31,7 @@ if os.path.exists(dataset_json_path):
         dataset_json = [json.loads(line) for line in f]
 
 
-def get_landmarks(frame, frame_count) -> Optional[np.ndarray]:
+def get_landmarks(frame: np.ndarray, frame_count: int) -> Optional[np.ndarray]:
     mp_frame = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
     results = detector.detect_for_video(mp_frame, frame_count)
     hand_landmarks = results.hand_landmarks
@@ -41,9 +42,12 @@ def get_landmarks(frame, frame_count) -> Optional[np.ndarray]:
 
 
 class VideoGUI:
-    def __init__(self, master: tk.Tk, choices: List[str]):
-        self.master = master
-        self.master.title("Video GUI")
+    def __init__(self, choices: List[str], gesture_model=None):
+        self.gesture_model = gesture_model
+        self.choices = choices
+        self.master = tk.Tk()
+        self.master.geometry(f"{WIDTH}x{HEIGHT + 100}")
+        self.master.title("Create Gesture Dataset | Inference Model")
         self.master.protocol("WM_DELETE_WINDOW", self.on_close)
         self.master.resizable(False, False)
         self.master.bind("<Escape>", lambda e: self.on_close())
@@ -89,7 +93,8 @@ class VideoGUI:
         self.menu_variable = tk.StringVar()
         self.menu_variable.set(choices[0])
 
-        self.dropdown_menu = ttk.Combobox(self.frame, textvariable=self.menu_variable, values=choices, font=font)
+        self.dropdown_menu = ttk.Combobox(self.frame, state="readonly", textvariable=self.menu_variable,
+                                          values=choices, font=font)
         self.dropdown_menu.pack(side="left", padx=(0, 10))
         self.dropdown_menu.bind("<<ComboboxSelected>>", self.on_dropdown_select)
 
@@ -110,6 +115,15 @@ class VideoGUI:
             dataset_json.append(self.last_landmarks_and_choice)
             print(f"Added {self.last_landmarks_and_choice} to the dataset")
 
+    def get_top_guesses(self, landmarks: np.ndarray, k: int = 3) -> list[str]:
+        assert self.gesture_model is not None, "Gesture model is not loaded"
+        landmarks = torch.tensor(normalize_landmarks(landmarks)).float()
+        outputs = self.gesture_model(landmarks.unsqueeze(0))
+        top_k = torch.topk(outputs, k)
+        top_k_labels = [self.choices[i] for i in top_k.indices[0].tolist()]
+        top_k_probs = top_k.values[0].tolist()
+        return [f"{label} ({prob * 100:.2f}%)" for label, prob in zip(top_k_labels, top_k_probs)]
+
     def update_frame(self):
         ret, frame = cap.read()
         if ret:
@@ -119,8 +133,12 @@ class VideoGUI:
             frame = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
             if landmarks is not None:
                 choice = self.menu_variable.get()
-                self.last_landmarks_and_choice = {"landmarks": landmarks.reshape(-1).tolist(), "choice": choice}
+                self.last_landmarks_and_choice = {"landmarks": landmarks.reshape(-1).tolist(), "label": choice}
                 frame = draw_landmarks_on_image(frame, landmarks)
+                if self.gesture_model is not None:
+                    guesses = self.get_top_guesses(landmarks)
+                    for i, guess in enumerate(guesses):
+                        cv2.putText(frame, guess, (10, 50 + 30 * i), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             else:
                 self.last_landmarks_and_choice = None
             self.frame_count += 1
@@ -137,11 +155,18 @@ class VideoGUI:
         print(f"Selected choice: {selected_choice}")
 
 
-root = tk.Tk()
-root.geometry(f"{WIDTH}x{HEIGHT + 100}")
+if __name__ == '__main__':
+    with open('choices.txt') as f:
+        choices = f.read().splitlines()
+        choices.sort()
 
-with open('choices.txt') as f:
-    choices = f.read().splitlines()
-    choices.sort()
-video_gui = VideoGUI(root, choices=choices)
-root.mainloop()
+    model_save_path = "../models/gesture_model.pth"
+    if not os.path.exists(model_save_path):
+        print(f"File {model_save_path} not found; not loading the gesture model")
+        gesture_model = None
+    else:
+        from utils import load_gesture_model
+
+        gesture_model = load_gesture_model(model_save_path, len(choices))
+    video_gui = VideoGUI(choices=choices, gesture_model=gesture_model)
+    video_gui.master.mainloop()

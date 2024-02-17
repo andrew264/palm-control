@@ -1,5 +1,8 @@
+from typing import TypeVar
+
 import cv2
 import numpy as np
+import torch
 
 from typin import HAND_CONNECTIONS
 
@@ -93,11 +96,42 @@ def load_mediapipe_model(num_hands: int = 2, model_path: str = './models/hand_la
     return detector
 
 
-def load_gesture_model(model_path: str, num_classes: int):
-    import torch
+def load_gesture_model(model_path: str, num_classes: int) -> torch.nn.Module:
     from gesture_network import GestureFFN
     model = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=num_classes)
-    model.load_state_dict(torch.load(model_path))
+    try:
+        model.load_state_dict(torch.load(model_path))
+    except RuntimeError:
+        print(f"Failed to load weights possibly due to a mismatch in the number of classes")
+        print(f"Loading model without weights")
     model.cpu()
     model.eval()
     return model
+
+
+T = TypeVar('T', list, np.ndarray, torch.Tensor)
+
+
+def normalize_landmarks(landmarks: T) -> T:
+    if isinstance(landmarks, np.ndarray):
+        if landmarks.ndim > 1:
+            landmarks = landmarks.flatten()
+        mean = np.mean(landmarks, axis=0)
+        std = np.std(landmarks, axis=0)
+        return (landmarks - mean) / std
+    elif isinstance(landmarks, torch.Tensor):
+        if landmarks.ndim > 1:
+            landmarks = landmarks.flatten()
+        landmarks = landmarks.float()
+        mean = torch.mean(landmarks, dim=0)
+        std = torch.std(landmarks, dim=0)
+        return (landmarks - mean) / std
+    else:
+        raise ValueError(f"Unsupported type {type(landmarks)}")
+
+
+def get_gesture_class_labels(file_path: str) -> list[str]:
+    with open(file_path, "r") as file:
+        labels = file.read().splitlines()
+        labels = [label.strip() for label in labels]
+        return sorted(labels)

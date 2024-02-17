@@ -1,20 +1,29 @@
+import json
 import os
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
-from gesture_rec.gesture_dataset import GestureDataset
-from utils import load_gesture_model
+from gesture_network import GestureFFN
+from utils import normalize_landmarks, get_gesture_class_labels
 
-choices_file = "choices.txt"
-if not os.path.exists(choices_file):
-    raise FileNotFoundError(f"File {choices_file} not found")
 
-dataset_file = "dataset.jsonl"
-if not os.path.exists(dataset_file):
-    raise FileNotFoundError(f"File {dataset_file} not found")
+class GestureDataset(Dataset):
+    def __init__(self, file_path: str, labels: list):
+        self.file_path = file_path
+        self.data = []
+        self.label_to_idx = {label: idx for idx, label in enumerate(labels)}
+        with open(file_path, "r") as file:
+            for line in file:
+                self.data.append(json.loads(line))
 
-model_save_path = "../models/gesture_model.pth"
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        landmarks = self.data[idx]["landmarks"]
+        label = self.data[idx]["label"]
+        return normalize_landmarks(torch.tensor(landmarks)), self.label_to_idx[label]
 
 
 def train_model(model, dataset, save_path, epochs=10, batch_size=32):
@@ -41,16 +50,21 @@ def train_model(model, dataset, save_path, epochs=10, batch_size=32):
 
 if __name__ == "__main__":
     # load and sort labels
-    with open(choices_file, "r") as file:
-        labels = file.read().splitlines()
-        labels = [label.strip() for label in labels]
-        labels = sorted(labels)
+    choices_file = "choices.txt"
+    if not os.path.exists(choices_file):
+        raise FileNotFoundError(f"File {choices_file} not found")
+
+    dataset_file = "dataset.jsonl"
+    if not os.path.exists(dataset_file):
+        raise FileNotFoundError(f"File {dataset_file} not found")
+
+    model_save_path = "../models/gesture_model.pth"
+    labels = get_gesture_class_labels(choices_file)
 
     # load dataset
     dataset = GestureDataset(file_path=dataset_file, labels=labels)
+    num_classes = len(labels)
 
-    output_size = len(labels)
-
-    # da sequential model
-    model = load_gesture_model(model_save_path, output_size)
-    train_model(model, dataset, model_save_path, epochs=1000, batch_size=64)
+    # da model
+    model = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=num_classes)
+    train_model(model, dataset, model_save_path, epochs=500, batch_size=32)
