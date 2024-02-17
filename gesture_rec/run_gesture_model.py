@@ -27,6 +27,7 @@ def load_model(path: str) -> nn.Module:
     model = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=len(labels))
     model.load_state_dict(torch.load(path))
     model.cpu()
+    model.eval()
     return model
 
 
@@ -42,13 +43,12 @@ def normalize(landmarks: list | torch.Tensor):
     return (landmarks - mean) / std
 
 
+@torch.inference_mode()
 def predict_gesture(model, landmarks):
-    with torch.no_grad():
-        model.eval()
-        landmarks = normalize(landmarks)
-        outputs = model(landmarks.unsqueeze(0))
-        _, predicted = torch.max(outputs, 1)
-        return labels[predicted.item()]
+    landmarks = normalize(landmarks)
+    outputs = model(landmarks.unsqueeze(0))
+    _, predicted = torch.max(outputs, 1)
+    return labels[predicted.item()]
 
 
 if __name__ == '__main__':
