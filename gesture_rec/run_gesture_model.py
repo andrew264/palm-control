@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from gesture_rec.gesture_network import GestureFFN
+from gesture_network import GestureFFN
 from hand import Hand
 from hand_tracking import HandTrackingThread
 from utils import draw_landmarks_on_image

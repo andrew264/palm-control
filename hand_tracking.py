@@ -5,7 +5,7 @@ import mediapipe as mp
 import numpy as np
 
 from hand import Hand
-from utils import load_model
+from utils import load_mediapipe_model
 
 
 class HandTrackingThread(threading.Thread):
@@ -19,7 +19,7 @@ class HandTrackingThread(threading.Thread):
                  camera_fps: int) -> None:
         threading.Thread.__init__(self, daemon=True, name="HandTrackingThread")
         self.hand = hand
-        self.detector = load_model(num_hands=num_hands, model_path=model_path)
+        self.detector = load_mediapipe_model(num_hands=num_hands, model_path=model_path)
         self.camera_id = camera_id
         self.camera_width = camera_width
         self.camera_height = camera_height

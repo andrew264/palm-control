@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import tkinter as tk
+from tkinter import ttk
 from tkinter.font import Font
 from typing import List, Optional
 
@@ -12,7 +13,7 @@ from PIL import Image, ImageTk
 
 sys.path.insert(0, '../')
 
-from utils import load_model, draw_landmarks_on_image
+from utils import load_mediapipe_model, draw_landmarks_on_image
 
 cap = cv2.VideoCapture(0)
 WIDTH, HEIGHT = 1280, 720
@@ -21,7 +22,7 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
 cap.set(cv2.CAP_PROP_FPS, FPS)
 
-detector = load_model(num_hands=1, model_path='../models/hand_landmarker.task')
+detector = load_mediapipe_model(num_hands=1, model_path='../models/hand_landmarker.task')
 dataset_json = []
 dataset_json_path = "dataset.jsonl"
 if os.path.exists(dataset_json_path):
@@ -53,6 +54,12 @@ class VideoGUI:
 
         self.master.config(bg="black")
 
+        self.image_label = None
+        self.frame = None
+        self.dropdown_menu = None
+        self.menu_variable = None
+        self.capture_button = None
+
         self.create_widgets(choices)
         self.update_every = int(1000 / FPS)
         self.master.after(self.update_every, self.update_frame)
@@ -72,26 +79,25 @@ class VideoGUI:
     def create_widgets(self, choices: List[str]):
         font = Font(family='Roboto Mono', size=14)
 
-        self.image_label = tk.Label(self.master, anchor=tk.CENTER)
+        self.image_label = ttk.Label(self.master)
         self.image_label.pack()
 
         # Create a dropdown menu with initial selection
-        self.frame = tk.Frame(self.master, bg="black")
-        self.frame.pack()
+        self.frame = ttk.Frame(self.master)
+        self.frame.pack(fill="x", pady=10)
 
         self.menu_variable = tk.StringVar()
         self.menu_variable.set(choices[0])
-        self.dropdown_menu = tk.OptionMenu(self.frame, self.menu_variable, *choices)
-        self.dropdown_menu.config(font=font)
-        self.dropdown_menu.pack(side=tk.LEFT)
-        # Bind dropdown menu change event
-        self.dropdown_menu.bind('<<MenuSelect>>', self.on_dropdown_select)
 
-        self.capture_button = tk.Button(self.frame,
-                                        text="Capture Coordinates",
-                                        command=self.capture_button_click,
-                                        font=font, )
-        self.capture_button.pack(side=tk.RIGHT)
+        self.dropdown_menu = ttk.Combobox(self.frame, textvariable=self.menu_variable, values=choices, font=font)
+        self.dropdown_menu.pack(side="left", padx=(0, 10))
+        self.dropdown_menu.bind("<<ComboboxSelected>>", self.on_dropdown_select)
+
+        style = ttk.Style()
+        style.configure("TButton", font=font)
+
+        self.capture_button = ttk.Button(self.frame, text="Capture Coordinates", command=self.capture_button_click)
+        self.capture_button.pack(side="right")
 
     @staticmethod
     def undo_button_click():

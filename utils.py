@@ -1,7 +1,5 @@
 import cv2
 import numpy as np
-from mediapipe import solutions
-from mediapipe.framework.formats import landmark_pb2
 
 from typin import HAND_CONNECTIONS
 
@@ -36,6 +34,9 @@ def draw_landmarks_on_image(_img: np.ndarray, _points: np.ndarray):
 
 
 def draw_mp_landmarks_on_image(rgb_image, detection_result):
+    from mediapipe import solutions
+    from mediapipe.framework.formats import landmark_pb2
+
     MARGIN = 10  # pixels
     FONT_SIZE = 1
     FONT_THICKNESS = 1
@@ -76,7 +77,7 @@ def draw_mp_landmarks_on_image(rgb_image, detection_result):
     return annotated_image
 
 
-def load_model(num_hands: int = 2, model_path: str = './models/hand_landmarker.task'):
+def load_mediapipe_model(num_hands: int = 2, model_path: str = './models/hand_landmarker.task'):
     import mediapipe as mp
     from mediapipe.tasks import python
     HandLandmarker = mp.tasks.vision.HandLandmarker
@@ -90,3 +91,13 @@ def load_model(num_hands: int = 2, model_path: str = './models/hand_landmarker.t
         min_tracking_confidence=0.3)
     detector = HandLandmarker.create_from_options(options)
     return detector
+
+
+def load_gesture_model(model_path: str, num_classes: int):
+    import torch
+    from gesture_network import GestureFFN
+    model = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=num_classes)
+    model.load_state_dict(torch.load(model_path))
+    model.cpu()
+    model.eval()
+    return model

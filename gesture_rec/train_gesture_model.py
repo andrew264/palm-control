@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from gesture_rec.gesture_dataset import GestureDataset
-from gesture_rec.gesture_network import GestureFFN
+from utils import load_gesture_model
 
 choices_file = "choices.txt"
 if not os.path.exists(choices_file):
@@ -17,7 +17,7 @@ if not os.path.exists(dataset_file):
 model_save_path = "../models/gesture_model.pth"
 
 
-def train_model(model, dataset, device, save_path, epochs=10, batch_size=32):
+def train_model(model, dataset, save_path, epochs=10, batch_size=32):
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -25,8 +25,6 @@ def train_model(model, dataset, device, save_path, epochs=10, batch_size=32):
         accum_loss = 0
         accum_accuracy = 0
         for landmarks, target in dataloader:
-            landmarks = landmarks.to(device)
-            target = target.to(device)
             optimizer.zero_grad()
             outputs = model(landmarks)
             loss = criterion(outputs, target)
@@ -51,15 +49,8 @@ if __name__ == "__main__":
     # load dataset
     dataset = GestureDataset(file_path=dataset_file, labels=labels)
 
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
-
-    # some model parameters
-    input_size = 21 * 3
-    hidden_size = 256
     output_size = len(labels)
 
     # da sequential model
-    model = GestureFFN(input_size, hidden_size, output_size)
-    model.to(device)
-    train_model(model, dataset, device, model_save_path, epochs=1000, batch_size=64)
+    model = load_gesture_model(model_save_path, output_size)
+    train_model(model, dataset, model_save_path, epochs=1000, batch_size=64)
