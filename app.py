@@ -1,6 +1,7 @@
 import time
 import tkinter as tk
 from tkinter import ttk
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -8,7 +9,7 @@ import pyautogui
 import whisper
 from PIL import Image, ImageTk
 
-from gesture_detector import GestureDetector
+from gesture_detector import GestureDetectorProMax
 from hand import Hand
 from hand_tracking import HandTrackingThread
 from speech import SpeechThread
@@ -60,7 +61,10 @@ class GUI:
 
         self.audio_thread = SpeechThread(model=audio_model,
                                          model_name=audio_model_name)
-        self.gesture_detector = GestureDetector(hand)
+        # self.gesture_detector = GestureDetector(hand)
+        self.gesture_detector = GestureDetectorProMax(hand, model_path='./models/gesture_model.pth',
+                                                      labels_path='./gesture_rec/choices.txt'
+                                                      )
 
         self.create_widgets()
         self.update_frame()
@@ -130,7 +134,9 @@ class GUI:
     def run(self):
         self.root.mainloop()
 
-    def do_mouse_movement(self, x, y):
+    def do_mouse_movement(self, x: Optional[float], y: Optional[float]):
+        if x is None or y is None:
+            return
         x, y = x * WIDTH, y * HEIGHT
         x = np.interp(x, (300, WIDTH - 300), (0, SCREEN_WIDTH))
         y = np.interp(y, (400, HEIGHT - 50), (0, SCREEN_HEIGHT))
@@ -163,13 +169,18 @@ class GUI:
 
     def process_loop(self):
         if not hand.is_missing:
+            mouse_coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
+            if mouse_coords is None:
+                x, y = None, None
+            else:
+                x, y = mouse_coords
             self.current_event = self.gesture_detector.detect()
             if self.current_event != HandEvent.MOUSE_DRAG and self.is_mouse_button_down:
                 self.disable_mouse_drag()
             match self.current_event:
                 case HandEvent.MOUSE_DRAG:
                     self.enable_mouse_drag()
-                    self.do_mouse_movement(*hand.coordinates_2d[HandLandmark.WRIST].tolist())
+                    self.do_mouse_movement(x, y)
                 case HandEvent.MOUSE_CLICK:
                     if self.allow_click():
                         pyautogui.click(_pause=False)
@@ -185,7 +196,7 @@ class GUI:
                         self.audio_thread = SpeechThread(model=audio_model, model_name=audio_model_name)
                         self.audio_thread.start()
                 case HandEvent.MOUSE_MOVE:
-                    self.do_mouse_movement(*hand.coordinates_2d[HandLandmark.WRIST].tolist())
+                    self.do_mouse_movement(x, y)
                 case _:
                     pass
         else:
