@@ -9,7 +9,7 @@ import pyautogui
 import whisper
 from PIL import Image, ImageTk
 
-from gesture_detector import GestureDetectorProMax
+from gesture_detector import GestureDetectorProMax, GestureDetector
 from hand import Hand
 from hand_tracking import HandTrackingThread
 from speech import SpeechThread
@@ -56,15 +56,15 @@ class GUI:
         self.last_click_time = time.time()
         self.is_mouse_button_down = False
         self.mouse_smoothness_alpha = DEFAULT_MOUSE_SMOOTHNESS
-        self.prev_x, self.prev_y = 0, 0
+        self.prev_x, self.prev_y = None, None
         self.current_event = HandEvent.MOUSE_NO_EVENT
 
         self.audio_thread = SpeechThread(model=audio_model,
                                          model_name=audio_model_name)
-        # self.gesture_detector = GestureDetector(hand)
-        self.gesture_detector = GestureDetectorProMax(hand, model_path='./models/gesture_model.pth',
-                                                      labels_path='./gesture_rec/choices.txt'
-                                                      )
+        self.gesture_detector = GestureDetector(hand)
+        # self.gesture_detector = GestureDetectorProMax(hand, model_path='./models/gesture_model.pth',
+        #                                               labels_path='./gesture_rec/choices.txt'
+        #                                               )
 
         self.create_widgets()
         self.update_frame()
@@ -135,21 +135,35 @@ class GUI:
         self.root.mainloop()
 
     def do_mouse_movement(self, x: Optional[float], y: Optional[float]):
-        if x is None or y is None:
+        if not (x and y):
+            self.prev_x, self.prev_y = None, None
             return
-        x, y = x * WIDTH, y * HEIGHT
-        x = np.interp(x, (300, WIDTH - 300), (0, SCREEN_WIDTH))
-        y = np.interp(y, (400, HEIGHT - 50), (0, SCREEN_HEIGHT))
 
-        if x > SCREEN_WIDTH:
-            x = SCREEN_WIDTH
-        if y > SCREEN_HEIGHT:
-            y = SCREEN_HEIGHT
+        if self.prev_x is None or self.prev_y is None:
+            self.prev_x, self.prev_y = x, y
+            return
 
-        self.prev_x = self.mouse_smoothness_alpha * self.prev_x + (1 - self.mouse_smoothness_alpha) * x
-        self.prev_y = self.mouse_smoothness_alpha * self.prev_y + (1 - self.mouse_smoothness_alpha) * y
+        A1, B1 = pyautogui.position()
 
-        pyautogui.moveTo(self.prev_x, self.prev_y, duration=.0, _pause=False)
+        distance = ((x - self.prev_x) ** 2 + (y - self.prev_y) ** 2) ** 0.5
+        base_multiplier = 100
+        multiplier = max(base_multiplier * distance, 1.)
+
+        dx = (x - self.prev_x) * multiplier
+        dy = (y - self.prev_y) * multiplier
+
+        # Calculate the new coordinates
+        A2 = (SCREEN_WIDTH * dx) + A1
+        B2 = (SCREEN_HEIGHT * dy) + B1
+
+        self.prev_x, self.prev_y = x, y
+
+        # Smooth the movement
+        alpha = self.mouse_smoothness_alpha
+        A2 = int(A1 * (1 - alpha) + A2 * alpha)
+        B2 = int(B1 * (1 - alpha) + B2 * alpha)
+
+        pyautogui.moveTo(A2, B2, duration=.0, _pause=False)
 
     def allow_click(self):
         if time.time() - self.last_click_time > 1.0:
@@ -169,11 +183,11 @@ class GUI:
 
     def process_loop(self):
         if not hand.is_missing:
-            mouse_coords = hand.coordinates_2d[HandLandmark.WRIST].tolist()
-            if mouse_coords is None:
-                x, y = None, None
+            hand_coords = hand.coordinates_of(HandLandmark.WRIST)
+            if hand_coords is not None:
+                x, y, _ = hand_coords.tolist()
             else:
-                x, y = mouse_coords
+                x, y = None, None
             self.current_event = self.gesture_detector.detect()
             if self.current_event != HandEvent.MOUSE_DRAG and self.is_mouse_button_down:
                 self.disable_mouse_drag()
@@ -195,13 +209,15 @@ class GUI:
                     elif self.audio_thread.finished:
                         self.audio_thread = SpeechThread(model=audio_model, model_name=audio_model_name)
                         self.audio_thread.start()
+                    self.prev_x, self.prev_y = None, None
                 case HandEvent.MOUSE_MOVE:
                     self.do_mouse_movement(x, y)
                 case _:
-                    pass
+                    self.prev_x, self.prev_y = None, None
         else:
             self.current_event = HandEvent.MOUSE_NO_EVENT
             self.disable_mouse_drag()
+            self.prev_x, self.prev_y = None, None
         self.root.after(8, self.process_loop)
 
 
