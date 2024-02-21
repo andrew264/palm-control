@@ -1,4 +1,5 @@
 import threading
+from queue import Queue
 
 import cv2
 import mediapipe as mp
@@ -11,6 +12,7 @@ from utils import load_mediapipe_model
 class HandTrackingThread(threading.Thread):
     def __init__(self,
                  hand: Hand,
+                 frame_queue: Queue,
                  num_hands: int,
                  model_path: str,
                  camera_id: int,
@@ -19,6 +21,7 @@ class HandTrackingThread(threading.Thread):
                  camera_fps: int) -> None:
         threading.Thread.__init__(self, daemon=True, name="HandTrackingThread")
         self.hand = hand
+        self.frame_queue = frame_queue
         self.detector = load_mediapipe_model(num_hands=num_hands, model_path=model_path)
         self.camera_id = camera_id
         self.camera_width = camera_width
@@ -36,8 +39,10 @@ class HandTrackingThread(threading.Thread):
             if not ret:
                 break
             image = cv2.flip(frame, 1)
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
-            results = self.detector.detect_for_video(mp_image, counter)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            self.frame_queue.put(image)
+            image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
+            results = self.detector.detect_for_video(image, counter)
             counter += 1
             if hand_landmarks := results.hand_landmarks:
                 self.hand.update(

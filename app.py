@@ -1,5 +1,6 @@
 import time
 import tkinter as tk
+from queue import Queue
 from tkinter import ttk
 from typing import Optional
 
@@ -9,7 +10,7 @@ import pyautogui
 import whisper
 from PIL import Image, ImageTk
 
-from gesture_detector import GestureDetectorProMax, GestureDetector
+from gesture_detector import GestureDetector
 from hand import Hand
 from hand_tracking import HandTrackingThread
 from speech import SpeechThread
@@ -19,15 +20,17 @@ from utils import draw_landmarks_on_image
 WIDTH, HEIGHT = 1280, 720
 FPS = 30
 
-hand = Hand(enable_smoothing=True, axis_dim=3)
 NUM_HANDS = 1
 EMPTY_FRAME = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
-DEFAULT_TRACKING_SMOOTHNESS: float = 5e-2
+DEFAULT_TRACKING_SMOOTHNESS: float = 5e-1
 DEFAULT_MOUSE_SMOOTHNESS: float = 0.7
 SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 pyautogui.FAILSAFE = False
 
-tracking_thread = HandTrackingThread(hand=hand, num_hands=NUM_HANDS, model_path='./models/hand_landmarker.task',
+hand = Hand(enable_smoothing=True, axis_dim=3, smoothness=DEFAULT_TRACKING_SMOOTHNESS)
+FRAME_QUEUE = Queue()
+tracking_thread = HandTrackingThread(hand=hand, frame_queue=FRAME_QUEUE, num_hands=NUM_HANDS,
+                                     model_path='./models/hand_landmarker.task',
                                      camera_id=0, camera_width=WIDTH, camera_height=HEIGHT, camera_fps=FPS)
 audio_model_name = "small.en"
 audio_model = whisper.load_model(name=audio_model_name, device="cpu")
@@ -50,6 +53,8 @@ class GUI:
         self.controls_frame = None
         self.tracking_smoothness_label = None
         self.tracking_smoothness = None
+        self.show_webcam_var = None
+        self.show_webcam_checkbox = None
         self.mouse_smoothness_label = None
         self.mouse_smoothness = None
 
@@ -75,27 +80,30 @@ class GUI:
         self.root.destroy()
 
     def create_widgets(self):
-        font = ("Roboto Mono", 12)
+        font = ("Roboto Mono", 14)
+
         self.tracking_image_label = ttk.Label(self.root)
         self.tracking_image_label.pack()
 
         self.controls_frame = ttk.Frame(self.root, padding=10)
         self.controls_frame.pack()
 
-        # Tracking Smoothness Section
         tracking_frame = ttk.Frame(self.controls_frame)
         tracking_frame.pack(fill="x", pady=(0, 10))
 
         self.tracking_smoothness_label = ttk.Label(tracking_frame, text="Tracking Smoothness:", font=font)
         self.tracking_smoothness_label.pack(side="left", padx=(0, 5))
 
-        self.tracking_smoothness = ttk.Scale(tracking_frame, from_=1., to=5e-3,
+        self.tracking_smoothness = ttk.Scale(tracking_frame, from_=1., to=1e-2,
                                              orient="horizontal", length=200)
         self.tracking_smoothness.set(DEFAULT_TRACKING_SMOOTHNESS)
         self.tracking_smoothness.config(command=self.update_tracking_smoothness)
-        self.tracking_smoothness.pack(fill="x")
+        self.tracking_smoothness.pack(fill="x", side="left")
 
-        # Mouse Smoothness Section
+        self.show_webcam_var = tk.IntVar(value=0)
+        self.show_webcam_checkbox = ttk.Checkbutton(tracking_frame, text="Show Webcam", variable=self.show_webcam_var)
+        self.show_webcam_checkbox.pack(side="left", padx=(20, 10))
+
         mouse_frame = ttk.Frame(self.controls_frame)
         mouse_frame.pack(fill="x")
 
@@ -106,10 +114,16 @@ class GUI:
                                           orient="horizontal", length=200)
         self.mouse_smoothness.set(DEFAULT_MOUSE_SMOOTHNESS)
         self.mouse_smoothness.config(command=self.update_mouse_smoothness)
-        self.mouse_smoothness.pack(fill="x")
+        self.mouse_smoothness.pack(fill="x", side="left")
 
     def get_tracking_frame(self) -> np.ndarray:
-        frame = EMPTY_FRAME.copy()
+        if self.show_webcam_var.get() == 1:
+            while FRAME_QUEUE.empty():
+                time.sleep(1e-3)
+            frame = FRAME_QUEUE.get()
+        else:
+            FRAME_QUEUE.queue.clear()
+            frame = EMPTY_FRAME.copy()
         if hand.coordinates_2d is not None:
             frame = draw_landmarks_on_image(frame, hand.coordinates_2d)
         cv2.putText(frame, f"Event: {self.current_event.name}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX,
@@ -222,6 +236,6 @@ class GUI:
 
 
 if __name__ == '__main__':
-    app = GUI()
     tracking_thread.start()
+    app = GUI()
     app.run()

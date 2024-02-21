@@ -23,9 +23,9 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
 cap.set(cv2.CAP_PROP_FPS, FPS)
 
-detector = load_mediapipe_model(num_hands=1, model_path='../models/hand_landmarker.task')
+detector = load_mediapipe_model(num_hands=1, model_path='./models/hand_landmarker.task')
 dataset_json = []
-dataset_json_path = "dataset.jsonl"
+dataset_json_path = "./gesture_rec/dataset.jsonl"
 if os.path.exists(dataset_json_path):
     with open(dataset_json_path, "r") as f:
         dataset_json = [json.loads(line) for line in f]
@@ -42,8 +42,8 @@ def get_landmarks(frame: np.ndarray, frame_count: int) -> Optional[np.ndarray]:
 
 
 class VideoGUI:
-    def __init__(self, choices: List[str], gesture_model=None):
-        self.gesture_model = gesture_model
+    def __init__(self, choices: List[str], g_model=None):
+        self.gesture_model = g_model
         self.choices = choices
         self.master = tk.Tk()
         self.master.geometry(f"{WIDTH}x{HEIGHT + 100}")
@@ -62,6 +62,8 @@ class VideoGUI:
         self.frame = None
         self.dropdown_menu = None
         self.menu_variable = None
+        self.show_webcam_var = None
+        self.show_webcam_checkbox = None
         self.capture_button = None
 
         self.create_widgets(choices)
@@ -99,9 +101,16 @@ class VideoGUI:
         self.dropdown_menu.bind("<<ComboboxSelected>>", self.on_dropdown_select)
 
         style = ttk.Style()
+        style.configure("TCheckbutton", font=font)
         style.configure("TButton", font=font)
 
-        self.capture_button = ttk.Button(self.frame, text="Capture Coordinates", command=self.capture_button_click)
+        self.show_webcam_var = tk.IntVar(value=0)  # Initially unchecked
+        self.show_webcam_checkbox = ttk.Checkbutton(self.frame, text="Show Webcam", variable=self.show_webcam_var,
+                                                    style="TCheckbutton")
+        self.show_webcam_checkbox.pack(side="left", padx=(0, 10))
+
+        self.capture_button = ttk.Button(self.frame, text="Capture Coordinates", command=self.capture_button_click,
+                                         style="TButton")
         self.capture_button.pack(side="right")
 
     @staticmethod
@@ -128,9 +137,10 @@ class VideoGUI:
         ret, frame = cap.read()
         if ret:
             frame = cv2.flip(frame, 1)
-
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             landmarks = get_landmarks(frame, self.frame_count)
-            frame = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
+            if self.show_webcam_var.get() == 0:
+                frame = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
             if landmarks is not None:
                 choice = self.menu_variable.get()
                 self.last_landmarks_and_choice = {"landmarks": landmarks.reshape(-1).tolist(), "label": choice}
@@ -156,12 +166,12 @@ class VideoGUI:
 
 
 if __name__ == '__main__':
-    choices_file = "choices.txt"
+    choices_file = "./gesture_rec/choices.txt"
     if not os.path.exists(choices_file):
         raise FileNotFoundError(f"File {choices_file} not found")
     labels = get_gesture_class_labels(choices_file)
 
-    model_save_path = "../models/gesture_model.pth"
+    model_save_path = "./models/gesture_model.pth"
     if not os.path.exists(model_save_path):
         print(f"File {model_save_path} not found; not loading the gesture model")
         gesture_model = None
@@ -169,5 +179,5 @@ if __name__ == '__main__':
         from utils import load_gesture_model
 
         gesture_model = load_gesture_model(model_save_path, len(labels))
-    video_gui = VideoGUI(choices=labels, gesture_model=gesture_model)
+    video_gui = VideoGUI(choices=labels, g_model=gesture_model)
     video_gui.master.mainloop()

@@ -7,7 +7,8 @@ from typin import HandLandmark
 
 
 class Hand:
-    def __init__(self, axis_dim: int = 3, num_landmarks: int = 21, enable_smoothing: bool = False):
+    def __init__(self, axis_dim: int = 3, num_landmarks: int = 21,
+                 enable_smoothing: bool = False, smoothness: float = 1e-1):
         size = num_landmarks * axis_dim  # 21 landmarks, 3 coordinates each
         self.axis_dim = axis_dim
         self.num_landmarks = num_landmarks
@@ -20,7 +21,7 @@ class Hand:
         self.filter.R *= 1e-1
         self.filter.P *= 1e-1
         if enable_smoothing:
-            self.filter.Q *= 5e-2
+            self.filter.Q *= smoothness
         else:
             self.filter.Q *= 1
         self.is_missing = True
