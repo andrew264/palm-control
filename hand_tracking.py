@@ -40,7 +40,7 @@ class HandTrackingThread(threading.Thread):
                 break
             image = cv2.flip(frame, 1)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            self.frame_queue.put(image)
+            self.frame_queue.put(image.copy())
             image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
             results = self.detector.detect_for_video(image, counter)
             counter += 1
