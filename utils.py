@@ -1,5 +1,3 @@
-from typing import TypeVar
-
 import cv2
 import numpy as np
 import torch
@@ -109,28 +107,54 @@ def load_gesture_model(model_path: str, num_classes: int) -> torch.nn.Module:
     return model
 
 
-T = TypeVar('T', list, np.ndarray, torch.Tensor)
+def normalize_landmarks(landmarks: np.ndarray) -> np.ndarray:
+    assert isinstance(landmarks, np.ndarray), "Landmarks must be a numpy array"
+    assert landmarks.shape[1] == 3, "Landmarks must be in 3D space"
+    n_landmarks = np.float32(landmarks)
+
+    min_vals = np.min(n_landmarks, axis=0)
+    max_vals = np.max(n_landmarks, axis=0)
+
+    ranges = max_vals - min_vals
+    ranges[ranges == 0] = 1.0
+
+    return (n_landmarks - min_vals) / ranges
 
 
-def normalize_landmarks(landmarks: T) -> T:
-    if isinstance(landmarks, np.ndarray):
-        n_landmarks = landmarks.copy()
-        n_axes = n_landmarks.shape[1]
-        for axis in range(n_axes):
-            min_value = np.min(n_landmarks[:, axis])
-            max_value = np.max(n_landmarks[:, axis])
-            n_landmarks[:, axis] = (n_landmarks[:, axis] - min_value) / (max_value - min_value)
-        return n_landmarks
-    elif isinstance(landmarks, torch.Tensor):
-        n_landmarks = landmarks.float().clone()
-        n_axes = n_landmarks.shape[1]
-        for axis in range(n_axes):
-            min_value = torch.min(n_landmarks[:, axis])
-            max_value = torch.max(n_landmarks[:, axis])
-            n_landmarks[:, axis] = (n_landmarks[:, axis] - min_value) / (max_value - min_value)
-        return n_landmarks
-    else:
-        raise ValueError(f"Unsupported type {type(landmarks)}")
+def rotate_points(points: np.ndarray, angle_x: float, angle_y: float, angle_z: float) -> np.ndarray:
+    """
+    Rotate points in 3D space around the x, y, and z axes.
+    """
+    assert isinstance(points, np.ndarray), "Points must be a numpy array"
+    assert points.shape[1] == 3, "Points must be in 3D space"
+    angle_x = np.radians(angle_x)
+    angle_y = np.radians(angle_y)
+    angle_z = np.radians(angle_z)
+    Rx = np.array([[1, 0, 0],
+                   [0, np.cos(angle_x), -np.sin(angle_x)],
+                   [0, np.sin(angle_x), np.cos(angle_x)]])
+
+    Ry = np.array([[np.cos(angle_y), 0, np.sin(angle_y)],
+                   [0, 1, 0],
+                   [-np.sin(angle_y), 0, np.cos(angle_y)]])
+
+    Rz = np.array([[np.cos(angle_z), -np.sin(angle_z), 0],
+                   [np.sin(angle_z), np.cos(angle_z), 0],
+                   [0, 0, 1]])
+
+    rotated_points = points.dot(Rx).dot(Ry).dot(Rz)
+
+    return rotated_points
+
+
+def random_rotate_points(points: np.ndarray, max_angle: float = 40.) -> np.ndarray:
+    """
+    Randomly rotate points in 3D space around the x, y, and z axes.
+    """
+    angle_x = np.random.uniform(-max_angle, max_angle)
+    angle_y = np.random.uniform(-max_angle, max_angle)
+    angle_z = np.random.uniform(-max_angle, max_angle)
+    return rotate_points(points, angle_x, angle_y, angle_z)
 
 
 def get_gesture_class_labels(file_path: str) -> list[str]:

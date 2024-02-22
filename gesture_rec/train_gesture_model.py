@@ -1,20 +1,22 @@
 import json
 import os
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
 from gesture_network import GestureFFN
-from utils import normalize_landmarks, get_gesture_class_labels
+from utils import normalize_landmarks, get_gesture_class_labels, random_rotate_points
 
 
 class GestureDataset(Dataset):
-    def __init__(self, file_path: str, labels: list):
+    def __init__(self, file_path: str, _labels: list, apply_random_rotation: bool = False):
         self.file_path = file_path
         self.data = []
-        self.label_to_idx = {label: idx for idx, label in enumerate(labels)}
-        self.labels = labels
-        self.num_classes = len(labels)
+        self.label_to_idx = {label: idx for idx, label in enumerate(_labels)}
+        self.labels = _labels
+        self.num_classes = len(_labels)
+        self.apply_random_rotation = apply_random_rotation
         with open(file_path, "r") as file:
             for line in file:
                 self.data.append(json.loads(line))
@@ -23,9 +25,11 @@ class GestureDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        landmarks = self.data[idx]["landmarks"]
+        landmarks = np.float32(self.data[idx]["landmarks"]).reshape(-1, 3)
         label = self.data[idx]["label"]
-        return normalize_landmarks(torch.tensor(landmarks)).flatten(), self.label_to_idx[label]
+        if self.apply_random_rotation:
+            landmarks = random_rotate_points(landmarks)
+        return normalize_landmarks(landmarks).flatten(), self.label_to_idx[label]
 
 
 def train_model(model: GestureFFN, dataset: GestureDataset, save_path: str, epochs=10, batch_size=32):
@@ -56,7 +60,7 @@ def stats(model: GestureFFN, dataset: GestureDataset):
     wrong = [0] * dataset.num_classes
     with torch.no_grad():
         for landmarks, target in dataset:
-            outputs = model(landmarks.unsqueeze(0))
+            outputs = model(torch.tensor(landmarks).unsqueeze(0))
             _, predicted = torch.max(outputs, 1)
             total[target] += 1
             if predicted == target:
@@ -81,10 +85,12 @@ if __name__ == "__main__":
     model_save_path = "./models/gesture_model.pth"
 
     # load dataset
-    data = GestureDataset(file_path=dataset_file, labels=labels)
+    data = GestureDataset(file_path=dataset_file, _labels=labels, apply_random_rotation=True)
     num_classes = len(labels)
 
     # da model
     model_ = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=num_classes)
+    model_.train()
     train_model(model_, data, model_save_path, epochs=1000, batch_size=32)
-    stats(model_, data)
+    model_.eval()
+    stats(model_, GestureDataset(file_path=dataset_file, _labels=labels))
