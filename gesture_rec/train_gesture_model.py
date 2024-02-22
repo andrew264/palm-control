@@ -13,6 +13,8 @@ class GestureDataset(Dataset):
         self.file_path = file_path
         self.data = []
         self.label_to_idx = {label: idx for idx, label in enumerate(labels)}
+        self.labels = labels
+        self.num_classes = len(labels)
         with open(file_path, "r") as file:
             for line in file:
                 self.data.append(json.loads(line))
@@ -26,7 +28,7 @@ class GestureDataset(Dataset):
         return normalize_landmarks(torch.tensor(landmarks)), self.label_to_idx[label]
 
 
-def train_model(model, dataset, save_path, epochs=10, batch_size=32):
+def train_model(model: GestureFFN, dataset: GestureDataset, save_path: str, epochs=10, batch_size=32):
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -48,6 +50,24 @@ def train_model(model, dataset, save_path, epochs=10, batch_size=32):
     torch.save(model.state_dict(), save_path)
 
 
+def stats(model: GestureFFN, dataset: GestureDataset):
+    correct = [0] * dataset.num_classes
+    total = [0] * dataset.num_classes
+    wrong = [0] * dataset.num_classes
+    with torch.no_grad():
+        for landmarks, target in dataset:
+            outputs = model(landmarks.unsqueeze(0))
+            _, predicted = torch.max(outputs, 1)
+            total[target] += 1
+            if predicted == target:
+                correct[target] += 1
+            else:
+                wrong[target] += 1
+    for i in range(dataset.num_classes):
+        print(f"Accuracy of {dataset.labels[i]}: {correct[i] / total[i] * 100:.2f}%")
+        print(f"Wrong predictions: {wrong[i]}/{total[i]}")
+
+
 if __name__ == "__main__":
     choices_file = "./gesture_rec/choices.txt"
     if not os.path.exists(choices_file):
@@ -61,9 +81,10 @@ if __name__ == "__main__":
     model_save_path = "./models/gesture_model.pth"
 
     # load dataset
-    dataset = GestureDataset(file_path=dataset_file, labels=labels)
+    data = GestureDataset(file_path=dataset_file, labels=labels)
     num_classes = len(labels)
 
     # da model
-    model = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=num_classes)
-    train_model(model, dataset, model_save_path, epochs=500, batch_size=32)
+    model_ = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=num_classes)
+    train_model(model_, data, model_save_path, epochs=1000, batch_size=32)
+    stats(model_, data)
