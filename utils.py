@@ -114,18 +114,21 @@ T = TypeVar('T', list, np.ndarray, torch.Tensor)
 
 def normalize_landmarks(landmarks: T) -> T:
     if isinstance(landmarks, np.ndarray):
-        if landmarks.ndim > 1:
-            landmarks = landmarks.flatten()
-        mean = np.mean(landmarks, axis=0)
-        std = np.std(landmarks, axis=0)
-        return (landmarks - mean) / std
+        n_landmarks = landmarks.copy()
+        n_axes = n_landmarks.shape[1]
+        for axis in range(n_axes):
+            min_value = np.min(n_landmarks[:, axis])
+            max_value = np.max(n_landmarks[:, axis])
+            n_landmarks[:, axis] = (n_landmarks[:, axis] - min_value) / (max_value - min_value)
+        return n_landmarks
     elif isinstance(landmarks, torch.Tensor):
-        if landmarks.ndim > 1:
-            landmarks = landmarks.flatten()
-        landmarks = landmarks.float()
-        mean = torch.mean(landmarks, dim=0)
-        std = torch.std(landmarks, dim=0)
-        return (landmarks - mean) / std
+        n_landmarks = landmarks.float().clone()
+        n_axes = n_landmarks.shape[1]
+        for axis in range(n_axes):
+            min_value = torch.min(n_landmarks[:, axis])
+            max_value = torch.max(n_landmarks[:, axis])
+            n_landmarks[:, axis] = (n_landmarks[:, axis] - min_value) / (max_value - min_value)
+        return n_landmarks
     else:
         raise ValueError(f"Unsupported type {type(landmarks)}")
 

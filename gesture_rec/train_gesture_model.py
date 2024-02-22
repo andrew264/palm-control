@@ -25,7 +25,7 @@ class GestureDataset(Dataset):
     def __getitem__(self, idx):
         landmarks = self.data[idx]["landmarks"]
         label = self.data[idx]["label"]
-        return normalize_landmarks(torch.tensor(landmarks)), self.label_to_idx[label]
+        return normalize_landmarks(torch.tensor(landmarks)).flatten(), self.label_to_idx[label]
 
 
 def train_model(model: GestureFFN, dataset: GestureDataset, save_path: str, epochs=10, batch_size=32):
