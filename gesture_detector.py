@@ -141,9 +141,9 @@ class GestureDetectorProMax:
         match label:
             case "NONE":
                 return HandEvent.MOUSE_NO_EVENT
-            case "INDEX_POINTING":
+            case "INDEX_POINTING" | "THUMB_MIDDLE_ALT_TOUCH":
                 return HandEvent.MOUSE_MOVE
-            case "THUMB_MIDDLE_TOUCH" | "THUMB_MIDDLE_ALT_TOUCH":
+            case "THUMB_MIDDLE_TOUCH":
                 return HandEvent.MOUSE_CLICK
             case "3_FINGER_PINCH":
                 return HandEvent.MOUSE_DRAG

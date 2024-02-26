@@ -7,10 +7,11 @@ from typing import Optional
 import cv2
 import numpy as np
 import pyautogui
+import torch
 import whisper
 from PIL import Image, ImageTk
 
-from gesture_detector import GestureDetector
+from gesture_detector import GestureDetector, GestureDetectorProMax  # noqa
 from hand import Hand
 from hand_tracking import HandTrackingThread
 from speech import SpeechThread
@@ -18,7 +19,7 @@ from typin import HandEvent, HandLandmark
 from utils import draw_landmarks_on_image
 
 WIDTH, HEIGHT = 1280, 720
-FPS = 30
+FPS = 60
 
 NUM_HANDS = 1
 EMPTY_FRAME = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
@@ -33,7 +34,13 @@ tracking_thread = HandTrackingThread(hand=hand, frame_queue=FRAME_QUEUE, num_han
                                      model_path='./models/hand_landmarker.task',
                                      camera_id=0, camera_width=WIDTH, camera_height=HEIGHT, camera_fps=FPS)
 audio_model_name = "small.en"
-audio_model = whisper.load_model(name=audio_model_name, device="cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+    print(f"Using {torch.cuda.get_device_name()}")
+else:
+    device = torch.device("cpu")
+    print("Using CPU ---------------- WARNING: This will be slow! -----------------")
+audio_model = whisper.load_model(name=audio_model_name, in_memory=True)
 
 
 class GUI:
@@ -66,10 +73,10 @@ class GUI:
 
         self.audio_thread = SpeechThread(model=audio_model,
                                          model_name=audio_model_name)
-        self.gesture_detector = GestureDetector(hand)
-        # self.gesture_detector = GestureDetectorProMax(hand, model_path='./models/gesture_model.pth',
-        #                                               labels_path='./gesture_rec/choices.txt'
-        #                                               )
+        # self.gesture_detector = GestureDetector(hand)
+        self.gesture_detector = GestureDetectorProMax(hand, model_path='./models/gesture_model.pth',
+                                                      labels_path='./gesture_rec/choices.txt'
+                                                      )
 
         self.create_widgets()
         self.update_frame()
@@ -143,7 +150,7 @@ class GUI:
         img = ImageTk.PhotoImage(image=img)
         self.tracking_image_label.config(image=img)
         self.tracking_image_label.image = img
-        self.root.after(1000 // FPS, self.update_frame)
+        self.root.after(12, self.update_frame)
 
     def run(self):
         self.root.mainloop()
@@ -157,27 +164,27 @@ class GUI:
             self.prev_x, self.prev_y = x, y
             return
 
-        A1, B1 = pyautogui.position()
+        # Smooth the mouse movement
+        alpha = self.mouse_smoothness_alpha
+        x = self.prev_x * (1 - alpha) + x * alpha
+        y = self.prev_y * (1 - alpha) + y * alpha
 
-        distance = ((x - self.prev_x) ** 2 + (y - self.prev_y) ** 2) ** 0.5
-        base_multiplier = 100
-        multiplier = max(base_multiplier * distance, 1.)
+        distance = ((x - self.prev_x) ** 2 + (y - self.prev_y) ** 2) ** .5
+        if distance < 1e-3:
+            return
+        multiplier = max(distance * 50, 1.)
 
         dx = (x - self.prev_x) * multiplier
         dy = (y - self.prev_y) * multiplier
 
         # Calculate the new coordinates
+        A1, B1 = pyautogui.position()
         A2 = (SCREEN_WIDTH * dx) + A1
         B2 = (SCREEN_HEIGHT * dy) + B1
 
         self.prev_x, self.prev_y = x, y
 
-        # Smooth the movement
-        alpha = self.mouse_smoothness_alpha
-        A2 = int(A1 * (1 - alpha) + A2 * alpha)
-        B2 = int(B1 * (1 - alpha) + B2 * alpha)
-
-        pyautogui.moveTo(A2, B2, duration=.0, _pause=False)
+        pyautogui.moveTo(int(A2), int(B2), _pause=False)
 
     def allow_click(self):
         if time.time() - self.last_click_time > 1.0:
@@ -232,7 +239,7 @@ class GUI:
             self.current_event = HandEvent.MOUSE_NO_EVENT
             self.disable_mouse_drag()
             self.prev_x, self.prev_y = None, None
-        self.root.after(8, self.process_loop)
+        self.root.after(5, self.process_loop)
 
 
 if __name__ == '__main__':
