@@ -48,9 +48,10 @@ def train_model(model: GestureFFN, dataset: GestureDataset, save_path: str, epoc
             accum_loss += loss.item()
             _, predicted = torch.max(outputs, 1)
             accum_accuracy += (predicted == target).sum().item() / len(predicted) * 100
-        loss = accum_loss / len(dataloader)
-        accuracy = accum_accuracy / len(dataloader)
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}")
+        if (epoch + 1) % 25 == 0:
+            loss = accum_loss / len(dataloader)
+            accuracy = accum_accuracy / len(dataloader)
+            print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}")
     torch.save(model.state_dict(), save_path)
 
 
@@ -89,7 +90,7 @@ if __name__ == "__main__":
     num_classes = len(labels)
 
     # da model
-    model_ = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=num_classes)
+    model_ = GestureFFN(input_size=21 * 3, hidden_size=512, output_size=num_classes)
     model_.train()
     train_model(model_, data, model_save_path, epochs=1000, batch_size=32)
     model_.eval()

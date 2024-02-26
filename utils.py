@@ -96,7 +96,7 @@ def load_mediapipe_model(num_hands: int = 2, model_path: str = './models/hand_la
 
 def load_gesture_model(model_path: str, num_classes: int) -> torch.nn.Module:
     from gesture_network import GestureFFN
-    model = GestureFFN(input_size=21 * 3, hidden_size=256, output_size=num_classes)
+    model = GestureFFN(input_size=21 * 3, hidden_size=512, output_size=num_classes)
     try:
         model.load_state_dict(torch.load(model_path))
     except RuntimeError:
