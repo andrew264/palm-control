@@ -1,7 +1,6 @@
 import time
 import tkinter as tk
-from multiprocessing import Queue as mpQueue
-from queue import Queue
+from multiprocessing import Queue
 from tkinter import ttk
 from typing import Optional
 
@@ -27,12 +26,6 @@ DEFAULT_MOUSE_SMOOTHNESS: float = 0.7
 SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 pyautogui.FAILSAFE = False
 
-hand = Hand(enable_smoothing=True, axis_dim=3, smoothness=DEFAULT_TRACKING_SMOOTHNESS)
-FRAME_QUEUE = Queue(maxsize=1)
-tracking_thread = HandTrackingThread(hand=hand, frame_queue=FRAME_QUEUE, num_hands=NUM_HANDS,
-                                     model_path='./models/hand_landmarker.task',
-                                     camera_id=0, camera_width=WIDTH, camera_height=HEIGHT, camera_fps=FPS)
-
 
 class GUI:
     def __init__(self):
@@ -57,6 +50,18 @@ class GUI:
         self.mouse_smoothness_label = None
         self.mouse_smoothness = None
 
+        # Hand Tracking Thread
+        self.hand = Hand(enable_smoothing=True, axis_dim=3, smoothness=DEFAULT_TRACKING_SMOOTHNESS)
+        self.video_frame_queue = Queue(maxsize=30)
+        self.hand_landmarks_queue = Queue(maxsize=30)
+        self.tracking_thread = HandTrackingThread(landmark_queue=self.hand_landmarks_queue,
+                                                  frame_queue=self.video_frame_queue,
+                                                  num_hands=NUM_HANDS,
+                                                  model_path='./models/hand_landmarker.task',
+                                                  camera_id=0,
+                                                  camera_width=WIDTH, camera_height=HEIGHT, camera_fps=FPS)
+        self.tracking_thread.start()
+
         # Mouse control
         self.last_click_time = time.time()
         self.is_mouse_button_down = False
@@ -65,15 +70,15 @@ class GUI:
         self.current_event = HandEvent.MOUSE_NO_EVENT
 
         # Audio Transcription
-        self.audio_thread_communication_queue = mpQueue(maxsize=1)
-        self.typewriter_queue = mpQueue(maxsize=1)
+        self.audio_thread_communication_queue = Queue(maxsize=1)
+        self.typewriter_queue = Queue(maxsize=1)
         self.audio_thread = SpeechThread(signal_queue=self.audio_thread_communication_queue,
                                          typewriter_queue=self.typewriter_queue)
         self.audio_thread.start()  # Start the thread to avoid latency when the user starts speaking
 
         # Gesture Detection
         # self.gesture_detector = GestureDetector(hand)
-        self.gesture_detector = GestureDetectorProMax(hand, model_path='./models/gesture_model.pth',
+        self.gesture_detector = GestureDetectorProMax(self.hand, model_path='./models/gesture_model.pth',
                                                       labels_path='./gesture_rec/choices.txt'
                                                       )
 
@@ -84,6 +89,7 @@ class GUI:
     def on_close(self):
         print("Closing the application")
         self.audio_thread.terminate()
+        self.tracking_thread.terminate()
         self.root.destroy()
 
     def create_widgets(self):
@@ -125,20 +131,19 @@ class GUI:
 
     def get_tracking_frame(self) -> np.ndarray:
         if self.show_webcam_var.get() == 1:
-            while FRAME_QUEUE.empty():
-                time.sleep(1e-3)
-            frame = FRAME_QUEUE.get()
+            frame = self.video_frame_queue.get()
         else:
             frame = EMPTY_FRAME.copy()
-        if hand.coordinates_2d is not None:
-            frame = draw_landmarks_on_image(frame, hand.coordinates_2d)
+            while not self.video_frame_queue.empty():
+                self.video_frame_queue.get()
+        if self.hand.coordinates_2d is not None:
+            frame = draw_landmarks_on_image(frame, self.hand.coordinates_2d)
         cv2.putText(frame, f"Event: {self.current_event.name}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX,
                     1, (255, 255, 255), 2)
         return frame
 
-    @staticmethod
-    def update_tracking_smoothness(value):
-        hand.set_filterQ(float(value))
+    def update_tracking_smoothness(self, value):
+        self.hand.set_filterQ(float(value))
 
     def update_mouse_smoothness(self, value):
         self.mouse_smoothness_alpha = float(value)
@@ -203,10 +208,13 @@ class GUI:
 
     def process_loop(self):
         while not self.typewriter_queue.empty():
-            text = self.typewriter_queue.get()
-            pyautogui.write(text, _pause=False)
-        if not hand.is_missing:
-            hand_coords = hand.coordinates_of(HandLandmark.WRIST)
+            pyautogui.write(self.typewriter_queue.get(), _pause=False)  # Keyboard input happens here
+
+        while not self.hand_landmarks_queue.empty():
+            self.hand.update(self.hand_landmarks_queue.get())  # Update the hand landmarks from the queue
+
+        if not self.hand.is_missing:
+            hand_coords = self.hand.coordinates_of(HandLandmark.WRIST)
             if hand_coords is not None:
                 x, y, _ = hand_coords.tolist()
             else:
@@ -240,6 +248,5 @@ class GUI:
 
 
 if __name__ == '__main__':
-    tracking_thread.start()
     app = GUI()
     app.run()
