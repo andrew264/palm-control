@@ -56,6 +56,7 @@ class GUI:
         self.style = ttk.Style(self.root)
         self.style.theme_use("clam")
 
+        # Widgets
         self.tracking_image_label = None
         self.controls_frame = None
         self.tracking_smoothness_label = None
@@ -65,6 +66,7 @@ class GUI:
         self.mouse_smoothness_label = None
         self.mouse_smoothness = None
 
+        # Mouse control
         self.last_click_time = time.time()
         self.is_mouse_button_down = False
         self.mouse_smoothness_alpha = DEFAULT_MOUSE_SMOOTHNESS
@@ -73,6 +75,7 @@ class GUI:
 
         self.audio_thread = SpeechThread(model=audio_model,
                                          model_name=audio_model_name)
+        self.audio_thread.start()  # Start the thread to avoid latency when the user starts speaking
         # self.gesture_detector = GestureDetector(hand)
         self.gesture_detector = GestureDetectorProMax(hand, model_path='./models/gesture_model.pth',
                                                       labels_path='./gesture_rec/choices.txt'
@@ -223,13 +226,7 @@ class GUI:
                     if self.allow_click():
                         pyautogui.rightClick(_pause=False)
                 case HandEvent.AUDIO_INPUT:
-                    if self.audio_thread.is_running:
-                        pass
-                    elif not self.audio_thread.is_running and not self.audio_thread.finished:
-                        self.audio_thread.start()
-                    elif self.audio_thread.finished:
-                        self.audio_thread = SpeechThread(model=audio_model, model_name=audio_model_name)
-                        self.audio_thread.start()
+                    self.audio_thread.transcribing = True  # Trigger the speech to text
                     self.prev_x, self.prev_y = None, None
                 case HandEvent.MOUSE_MOVE:
                     self.do_mouse_movement(x, y)
