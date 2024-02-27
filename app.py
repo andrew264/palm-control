@@ -1,5 +1,6 @@
 import time
 import tkinter as tk
+from multiprocessing import Queue as mpQueue
 from queue import Queue
 from tkinter import ttk
 from typing import Optional
@@ -7,8 +8,6 @@ from typing import Optional
 import cv2
 import numpy as np
 import pyautogui
-import torch
-import whisper
 from PIL import Image, ImageTk
 
 from gesture_detector import GestureDetector, GestureDetectorProMax  # noqa
@@ -29,18 +28,10 @@ SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 pyautogui.FAILSAFE = False
 
 hand = Hand(enable_smoothing=True, axis_dim=3, smoothness=DEFAULT_TRACKING_SMOOTHNESS)
-FRAME_QUEUE = Queue()
+FRAME_QUEUE = Queue(maxsize=1)
 tracking_thread = HandTrackingThread(hand=hand, frame_queue=FRAME_QUEUE, num_hands=NUM_HANDS,
                                      model_path='./models/hand_landmarker.task',
                                      camera_id=0, camera_width=WIDTH, camera_height=HEIGHT, camera_fps=FPS)
-audio_model_name = "small.en"
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-    print(f"Using {torch.cuda.get_device_name()}")
-else:
-    device = torch.device("cpu")
-    print("Using CPU ---------------- WARNING: This will be slow! -----------------")
-audio_model = whisper.load_model(name=audio_model_name, in_memory=True)
 
 
 class GUI:
@@ -73,9 +64,14 @@ class GUI:
         self.prev_x, self.prev_y = None, None
         self.current_event = HandEvent.MOUSE_NO_EVENT
 
-        self.audio_thread = SpeechThread(model=audio_model,
-                                         model_name=audio_model_name)
+        # Audio Transcription
+        self.audio_thread_communication_queue = mpQueue(maxsize=1)
+        self.typewriter_queue = mpQueue(maxsize=1)
+        self.audio_thread = SpeechThread(signal_queue=self.audio_thread_communication_queue,
+                                         typewriter_queue=self.typewriter_queue)
         self.audio_thread.start()  # Start the thread to avoid latency when the user starts speaking
+
+        # Gesture Detection
         # self.gesture_detector = GestureDetector(hand)
         self.gesture_detector = GestureDetectorProMax(hand, model_path='./models/gesture_model.pth',
                                                       labels_path='./gesture_rec/choices.txt'
@@ -87,6 +83,7 @@ class GUI:
 
     def on_close(self):
         print("Closing the application")
+        self.audio_thread.terminate()
         self.root.destroy()
 
     def create_widgets(self):
@@ -132,7 +129,6 @@ class GUI:
                 time.sleep(1e-3)
             frame = FRAME_QUEUE.get()
         else:
-            FRAME_QUEUE.queue.clear()
             frame = EMPTY_FRAME.copy()
         if hand.coordinates_2d is not None:
             frame = draw_landmarks_on_image(frame, hand.coordinates_2d)
@@ -206,6 +202,9 @@ class GUI:
             pyautogui.mouseUp(button='left', _pause=False)
 
     def process_loop(self):
+        while not self.typewriter_queue.empty():
+            text = self.typewriter_queue.get()
+            pyautogui.write(text, _pause=False)
         if not hand.is_missing:
             hand_coords = hand.coordinates_of(HandLandmark.WRIST)
             if hand_coords is not None:
@@ -226,7 +225,8 @@ class GUI:
                     if self.allow_click():
                         pyautogui.rightClick(_pause=False)
                 case HandEvent.AUDIO_INPUT:
-                    self.audio_thread.transcribing = True  # Trigger the speech to text
+                    if self.audio_thread_communication_queue.empty():
+                        self.audio_thread_communication_queue.put(True)
                     self.prev_x, self.prev_y = None, None
                 case HandEvent.MOUSE_MOVE:
                     self.do_mouse_movement(x, y)
@@ -236,7 +236,7 @@ class GUI:
             self.current_event = HandEvent.MOUSE_NO_EVENT
             self.disable_mouse_drag()
             self.prev_x, self.prev_y = None, None
-        self.root.after(5, self.process_loop)
+        self.root.after(4, self.process_loop)
 
 
 if __name__ == '__main__':

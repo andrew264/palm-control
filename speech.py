@@ -1,28 +1,42 @@
+import multiprocessing as mp
 import time
-from threading import Thread
 
 import chime
-import pyautogui
 import speech_recognition as sr
-from whisper import Whisper
+import torch
+import whisper
 
 chime.theme('big-sur')
 
 
-class SpeechThread(Thread):
-    def __init__(self, model: Whisper, model_name: str):
+class SpeechThread(mp.Process):
+    def __init__(self, signal_queue: mp.Queue, typewriter_queue: mp.Queue):
         super().__init__()
-        self.model = model
-        self.model_name = model_name
+        self.model_name = "small.en"
+        self.whisper_model = None
         self.recognizer = sr.Recognizer()
-        self.recognizer.whisper_model = {self.model_name: self.model, }
-        self.transcribing = False
+        self.recognizer.whisper_model = {self.model_name: self.whisper_model, }
+        self.signal_queue = signal_queue
+        self.typewriter_queue = typewriter_queue
 
     def run(self):
+        if not self.whisper_model:
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+                print(f"Using {torch.cuda.get_device_name()}")
+            else:
+                device = torch.device("cpu")
+                print("Using CPU ---------------- WARNING: This will be slow! -----------------")
+            self.whisper_model = whisper.load_model(name=self.model_name, device=device, ).eval()
+            if torch.cuda.is_available():
+                # compile the model
+                print("Compiling the whisper model...")
+                torch.compile(model=self.whisper_model.forward, fullgraph=True, mode='max-autotune')
         while True:
-            if self.transcribing:
+            if not self.signal_queue.empty() and self.signal_queue.get():  # If the signal queue is not empty
                 self.speech_to_text()
-                self.transcribing = False
+                while not self.signal_queue.empty():  # Clear the queue
+                    self.signal_queue.get()
             time.sleep(1)
 
     def speech_to_text(self, ):
@@ -35,7 +49,8 @@ class SpeechThread(Thread):
                 text: str = self.recognizer.recognize_whisper(audio, model=self.model_name).strip()
                 chime.success()
                 print(f"Recognized: {text}")
-                pyautogui.typewrite(text, interval=0.1, _pause=True)
+                # pyautogui.typewrite(text, interval=0.1, _pause=True) # pyautogui is not thread safe
+                self.typewriter_queue.put(text)
             except sr.UnknownValueError as e:
                 print(e)
                 chime.error()
