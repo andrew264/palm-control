@@ -141,7 +141,7 @@ class GestureDetectorProMax:
         match label:
             case "NONE":
                 return HandEvent.MOUSE_NO_EVENT
-            case "INDEX_POINTING" | "THUMB_MIDDLE_ALT_TOUCH":
+            case "INDEX_POINTING" | "OPEN_PALM":
                 return HandEvent.MOUSE_MOVE
             case "THUMB_MIDDLE_TOUCH":
                 return HandEvent.MOUSE_CLICK
@@ -152,5 +152,5 @@ class GestureDetectorProMax:
             case "THUMB_PINKY_TOUCH":
                 return HandEvent.AUDIO_INPUT
             case _:
-                print(f"Unknown label: {label}")
+                # print(f"Unknown label: {label}")
                 return HandEvent.MOUSE_NO_EVENT
