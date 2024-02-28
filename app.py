@@ -31,14 +31,22 @@ class GUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Palm Control GUI")
-        self.root.geometry(f"{WIDTH}x{HEIGHT + 100}")
+        self.root.geometry(f"{WIDTH}x{HEIGHT + 125}")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.resizable(False, False)
         self.root.bind("<Escape>", lambda e: self.on_close())
+        self.root.bind("<Control-q>", lambda e: self.on_close())
         self.root.config(bg="black")
 
         self.style = ttk.Style(self.root)
         self.style.theme_use("clam")
+        font = ("Roboto Mono", 12)
+        padding = 10
+        self.style.configure("TButton", font=font)
+        self.style.configure("TLabel", font=font, padding=(padding, padding, 0, 0))
+        self.style.configure("TScale", font=font, padding=(padding, padding, 0, 0))
+        self.style.configure("TCheckbutton", font=font, padding=(padding, padding, 0, 0))
+        self.style.configure("TCombobox", font=font, padding=(padding, padding, 0, 0))
 
         # Widgets
         self.tracking_image_label = None
@@ -49,6 +57,9 @@ class GUI:
         self.show_webcam_checkbox = None
         self.mouse_smoothness_label = None
         self.mouse_smoothness = None
+        self.mouse_pointer_label = None
+        self.mouse_pointer_source = None
+        self.mouse_pointer_dropdown = None
 
         # Hand Tracking Thread
         self.hand = Hand(enable_smoothing=True, axis_dim=3, smoothness=DEFAULT_TRACKING_SMOOTHNESS)
@@ -81,6 +92,7 @@ class GUI:
         self.gesture_detector = GestureDetectorProMax(self.hand, model_path='./models/gesture_model.pth',
                                                       labels_path='./gesture_rec/choices.txt'
                                                       )
+        self.current_pointer_source: HandLandmark = HandLandmark.WRIST
 
         self.create_widgets()
         self.update_frame()
@@ -93,8 +105,6 @@ class GUI:
         self.root.destroy()
 
     def create_widgets(self):
-        font = ("Roboto Mono", 14)
-
         self.tracking_image_label = ttk.Label(self.root)
         self.tracking_image_label.pack()
 
@@ -104,30 +114,44 @@ class GUI:
         tracking_frame = ttk.Frame(self.controls_frame)
         tracking_frame.pack(fill="x", pady=(0, 10))
 
-        self.tracking_smoothness_label = ttk.Label(tracking_frame, text="Tracking Smoothness:", font=font)
-        self.tracking_smoothness_label.pack(side="left", padx=(0, 5))
+        self.tracking_smoothness_label = ttk.Label(tracking_frame, text="Tracking Smoothness:", style="TLabel")
+        self.tracking_smoothness_label.pack(side="left", padx=(0, 5), )
 
         self.tracking_smoothness = ttk.Scale(tracking_frame, from_=1., to=1e-2,
-                                             orient="horizontal", length=200)
+                                             orient="horizontal", length=300, style="TScale")
         self.tracking_smoothness.set(DEFAULT_TRACKING_SMOOTHNESS)
         self.tracking_smoothness.config(command=self.update_tracking_smoothness)
-        self.tracking_smoothness.pack(fill="x", side="left")
+        self.tracking_smoothness.pack(fill="x", side="left", )
 
         self.show_webcam_var = tk.IntVar(value=0)
-        self.show_webcam_checkbox = ttk.Checkbutton(tracking_frame, text="Show Webcam", variable=self.show_webcam_var)
-        self.show_webcam_checkbox.pack(side="left", padx=(20, 10))
+        self.show_webcam_checkbox = ttk.Checkbutton(tracking_frame, text="Show Webcam", variable=self.show_webcam_var,
+                                                    style="TCheckbutton")
+        self.show_webcam_checkbox.pack(side="left", padx=40)
 
         mouse_frame = ttk.Frame(self.controls_frame)
         mouse_frame.pack(fill="x")
 
-        self.mouse_smoothness_label = ttk.Label(mouse_frame, text="Mouse Smoothness:", font=font)
-        self.mouse_smoothness_label.pack(side="left", padx=(0, 5))
+        self.mouse_smoothness_label = ttk.Label(mouse_frame, text="Mouse Smoothness:", style="TLabel")
+        self.mouse_smoothness_label.pack(side="left", )
 
         self.mouse_smoothness = ttk.Scale(mouse_frame, from_=0, to=1,
-                                          orient="horizontal", length=200)
+                                          orient="horizontal", length=300)
         self.mouse_smoothness.set(DEFAULT_MOUSE_SMOOTHNESS)
         self.mouse_smoothness.config(command=self.update_mouse_smoothness)
-        self.mouse_smoothness.pack(fill="x", side="left")
+        self.mouse_smoothness.pack(fill="x", side="left", )
+
+        self.mouse_pointer_label = ttk.Label(mouse_frame, text="Mouse Pointer Source:", style="TLabel")
+        self.mouse_pointer_label.pack(side="left", )
+
+        MOUSE_POINTER_CHOICES = [HandLandmark.WRIST.name, HandLandmark.INDEX_FINGER_TIP.name]
+        self.mouse_pointer_source = tk.StringVar()
+        self.mouse_pointer_source.set(MOUSE_POINTER_CHOICES[0])
+
+        self.mouse_pointer_dropdown = ttk.Combobox(mouse_frame, state="readonly",
+                                                   textvariable=self.mouse_pointer_source,
+                                                   values=MOUSE_POINTER_CHOICES, style="TCombobox")
+        self.mouse_pointer_dropdown.bind("<<ComboboxSelected>>", self.update_mouse_pointer)
+        self.mouse_pointer_dropdown.pack(side="left", )
 
     def get_tracking_frame(self) -> np.ndarray:
         if self.show_webcam_var.get() == 1:
@@ -147,6 +171,9 @@ class GUI:
 
     def update_mouse_smoothness(self, value):
         self.mouse_smoothness_alpha = float(value)
+
+    def update_mouse_pointer(self, event):
+        self.current_pointer_source = HandLandmark[self.mouse_pointer_source.get()]
 
     def update_frame(self):
         frame = self.get_tracking_frame()
@@ -214,7 +241,7 @@ class GUI:
             self.hand.update(self.hand_landmarks_queue.get())  # Update the hand landmarks from the queue
 
         if not self.hand.is_missing:
-            hand_coords = self.hand.coordinates_of(HandLandmark.WRIST)
+            hand_coords = self.hand.coordinates_of(self.current_pointer_source)
             if hand_coords is not None:
                 x, y, _ = hand_coords.tolist()
             else:
