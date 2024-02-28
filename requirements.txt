@@ -13,3 +13,4 @@ Pillow
 IPython
 jupyter
 torch
+sv_ttk

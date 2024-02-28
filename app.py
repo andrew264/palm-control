@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import pyautogui
 from PIL import Image, ImageTk
+import sv_ttk
 
 from gesture_detector import GestureDetector, GestureDetectorProMax  # noqa
 from hand import Hand
@@ -38,8 +39,9 @@ class GUI:
         self.root.bind("<Control-q>", lambda e: self.on_close())
         self.root.config(bg="black")
 
+        sv_ttk.set_theme("dark", self.root)
         self.style = ttk.Style(self.root)
-        self.style.theme_use("clam")
+        # self.style.theme_use("clam")
         font = ("Roboto Mono", 12)
         padding = 10
         self.style.configure("TButton", font=font)
