@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import os
 import time
 
 import chime
@@ -28,10 +29,12 @@ class SpeechThread(mp.Process):
                 device = torch.device("cpu")
                 print("Using CPU ---------------- WARNING: This will be slow! -----------------")
             self.whisper_model = whisper.load_model(name=self.model_name, device=device, ).eval()
-            if torch.cuda.is_available():
+            if torch.cuda.is_available() and os.name == 'posix':
                 # compile the model
                 print("Compiling the whisper model...")
                 torch.compile(model=self.whisper_model.forward, fullgraph=True, mode='max-autotune')
+            elif os.name == 'nt':
+                print("Windows does not support torch.jit.compile yet; skipping...")
         while True:
             if not self.signal_queue.empty() and self.signal_queue.get():  # If the signal queue is not empty
                 self.speech_to_text()
