@@ -52,4 +52,7 @@ class HandEvent(enum.IntEnum):
     MOUSE_DRAG = 2
     MOUSE_RIGHT_CLICK = 3
     AUDIO_INPUT = 4
+    PINCH_5FINGERS = 5
+    THUMBS_UP = 6
+    THUMBS_DOWN = 7
     MOUSE_NO_EVENT = 10

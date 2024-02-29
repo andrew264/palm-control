@@ -1,3 +1,4 @@
+import os
 import time
 import tkinter as tk
 from multiprocessing import Queue
@@ -7,8 +8,8 @@ from typing import Optional
 import cv2
 import numpy as np
 import pyautogui
-from PIL import Image, ImageTk
 import sv_ttk
+from PIL import Image, ImageTk
 
 from gesture_detector import GestureDetector, GestureDetectorProMax  # noqa
 from hand import Hand
@@ -219,6 +220,31 @@ class GUI:
 
         pyautogui.moveTo(int(A2), int(B2), _pause=False)
 
+    def pinch_scroll(self, x: Optional[float], y: Optional[float]):
+        if not (x and y):
+            self.prev_x, self.prev_y = None, None
+            return
+
+        if self.prev_x is None or self.prev_y is None:
+            self.prev_x, self.prev_y = x, y
+            return
+
+        y_dist = y - self.prev_y
+        x_dist = x - self.prev_x
+        if abs(y_dist) < 5e-3:
+            return
+        if abs(y_dist) > abs(x_dist):
+            scale = 1e4  # Scale the scroll distance
+            pyautogui.scroll(int(y_dist * scale), _pause=False)
+        else:
+            scale = 5e4  # Scale the scroll distance
+            if os.name == "nt":
+                with pyautogui.hold("shift"):
+                    pyautogui.scroll(int(y_dist * scale), _pause=False)
+            else:
+                pyautogui.hscroll(int(y_dist * scale), _pause=False)
+        self.prev_x, self.prev_y = x, y
+
     def allow_click(self):
         if time.time() - self.last_click_time > 1.0:
             self.last_click_time = time.time()
@@ -267,6 +293,12 @@ class GUI:
                     self.prev_x, self.prev_y = None, None
                 case HandEvent.MOUSE_MOVE:
                     self.do_mouse_movement(x, y)
+                case HandEvent.PINCH_5FINGERS:
+                    self.pinch_scroll(x, y)
+                case HandEvent.THUMBS_UP:
+                    pyautogui.press("volumeUp", _pause=False)
+                case HandEvent.THUMBS_DOWN:
+                    pyautogui.press("volumeDown", _pause=False)
                 case _:
                     self.prev_x, self.prev_y = None, None
         else:

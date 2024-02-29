@@ -151,6 +151,12 @@ class GestureDetectorProMax:
                 return HandEvent.MOUSE_RIGHT_CLICK
             case "THUMB_PINKY_TOUCH":
                 return HandEvent.AUDIO_INPUT
+            case "5_FINGER_PINCH":
+                return HandEvent.PINCH_5FINGERS
+            case "THUMBS_UP":
+                return HandEvent.THUMBS_UP
+            case "THUMBS_DOWN":
+                return HandEvent.THUMBS_DOWN
             case _:
                 # print(f"Unknown label: {label}")
                 return HandEvent.MOUSE_NO_EVENT
