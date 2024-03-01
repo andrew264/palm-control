@@ -231,18 +231,21 @@ class GUI:
 
         y_dist = y - self.prev_y
         x_dist = x - self.prev_x
-        if abs(y_dist) < 5e-3:
+        if abs(y_dist) < 1e-3 and abs(x_dist) < 1e-3:
             return
         if abs(y_dist) > abs(x_dist):
-            scale = 1e4  # Scale the scroll distance
+            if os.name == "nt":
+                scale = 1e4
+            else:
+                scale = 5e1
             pyautogui.scroll(int(y_dist * scale), _pause=False)
         else:
-            scale = 5e4  # Scale the scroll distance
             if os.name == "nt":
-                with pyautogui.hold("shift"):
-                    pyautogui.scroll(int(y_dist * scale), _pause=False)
+                scale = 5e4
             else:
-                pyautogui.hscroll(int(y_dist * scale), _pause=False)
+                scale = 5e2
+            with pyautogui.hold("shift"):
+                pyautogui.scroll(int(y_dist * scale), _pause=False)
         self.prev_x, self.prev_y = x, y
 
     def allow_click(self):
