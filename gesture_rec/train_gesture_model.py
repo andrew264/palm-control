@@ -34,7 +34,7 @@ class GestureDataset(Dataset):
 
 def train_model(model: GestureFFN, dataset: GestureDataset, save_path: str, epochs=10, batch_size=32):
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     for epoch in range(epochs):
         accum_loss = 0

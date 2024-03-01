@@ -293,12 +293,18 @@ class GUI:
                     self.prev_x, self.prev_y = None, None
                 case HandEvent.MOUSE_MOVE:
                     self.do_mouse_movement(x, y)
-                case HandEvent.PINCH_5FINGERS:
+                case HandEvent.MOUSE_SCROLL:
                     self.pinch_scroll(x, y)
-                case HandEvent.THUMBS_UP:
+                case HandEvent.VOLUME_UP:
                     pyautogui.press("volumeUp", _pause=False)
-                case HandEvent.THUMBS_DOWN:
+                case HandEvent.VOLUME_DOWN:
                     pyautogui.press("volumeDown", _pause=False)
+                case HandEvent.COPY_TEXT:
+                    if self.allow_click():
+                        pyautogui.hotkey("ctrl", "c",)
+                case HandEvent.PASTE_TEXT:
+                    if self.allow_click():
+                        pyautogui.hotkey("ctrl", "v",)
                 case _:
                     self.prev_x, self.prev_y = None, None
         else:

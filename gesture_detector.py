@@ -139,7 +139,7 @@ class GestureDetectorProMax:
     def detect(self) -> HandEvent:
         label = self._do_inference()
         match label:
-            case "NONE":
+            case "NONE" | "CLOSED_PALM":
                 return HandEvent.MOUSE_NO_EVENT
             case "INDEX_POINTING" | "OPEN_PALM":
                 return HandEvent.MOUSE_MOVE
@@ -152,11 +152,15 @@ class GestureDetectorProMax:
             case "THUMB_PINKY_TOUCH":
                 return HandEvent.AUDIO_INPUT
             case "5_FINGER_PINCH":
-                return HandEvent.PINCH_5FINGERS
+                return HandEvent.MOUSE_SCROLL
             case "THUMBS_UP":
-                return HandEvent.THUMBS_UP
+                return HandEvent.VOLUME_UP
             case "THUMBS_DOWN":
-                return HandEvent.THUMBS_DOWN
+                return HandEvent.VOLUME_DOWN
+            case "MIDDLE_UP":
+                return HandEvent.COPY_TEXT
+            case "MIDDLE_DOWN":
+                return HandEvent.PASTE_TEXT
             case _:
                 # print(f"Unknown label: {label}")
                 return HandEvent.MOUSE_NO_EVENT
