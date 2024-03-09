@@ -65,6 +65,7 @@ class GUI:
         self.mouse_pointer_dropdown = None
 
         # Hand Tracking Thread
+        self._last_video_frame = EMPTY_FRAME.copy()
         self.hand = Hand(enable_smoothing=True, axis_dim=3, smoothness=DEFAULT_TRACKING_SMOOTHNESS)
         self.video_frame_queue = Queue(maxsize=30)
         self.hand_landmarks_queue = Queue(maxsize=30)
@@ -158,16 +159,19 @@ class GUI:
 
     def get_tracking_frame(self) -> np.ndarray:
         if self.show_webcam_var.get() == 1:
-            frame = self.video_frame_queue.get()
+            if not self.video_frame_queue.empty():
+                self._last_video_frame = self.video_frame_queue.get(block=False)
         else:
-            frame = EMPTY_FRAME.copy()
+            self._last_video_frame = EMPTY_FRAME.copy()
             while not self.video_frame_queue.empty():
-                self.video_frame_queue.get()
+                self.video_frame_queue.get(block=False)
         if self.hand.coordinates_2d is not None:
-            frame = draw_landmarks_on_image(frame, self.hand.coordinates_2d)
-        cv2.putText(frame, f"Event: {self.current_event.name}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX,
-                    1, (255, 255, 255), 2)
-        return frame
+            frame = draw_landmarks_on_image(self._last_video_frame, self.hand.coordinates_2d)
+            cv2.putText(frame, f"Event: {self.current_event.name}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        1, (255, 255, 255), 2)
+            return frame
+        else:
+            return self._last_video_frame
 
     def update_tracking_smoothness(self, value):
         self.hand.set_filterQ(float(value))
@@ -184,7 +188,7 @@ class GUI:
         img = ImageTk.PhotoImage(image=img)
         self.tracking_image_label.config(image=img)
         self.tracking_image_label.image = img
-        self.root.after(12, self.update_frame)
+        self.root.after(8, self.update_frame)
 
     def run(self):
         self.root.mainloop()
@@ -206,7 +210,7 @@ class GUI:
         distance = ((x - self.prev_x) ** 2 + (y - self.prev_y) ** 2) ** .5
         if distance < 1e-3:
             return
-        multiplier = max(distance * 50, 1.)
+        multiplier = max(distance * 25, 1.)
 
         dx = (x - self.prev_x) * multiplier
         dy = (y - self.prev_y) * multiplier
@@ -237,7 +241,7 @@ class GUI:
             if os.name == "nt":
                 scale = 1e4
             else:
-                scale = 5e1
+                scale = 3e1
             pyautogui.scroll(int(y_dist * scale), _pause=False)
         else:
             if os.name == "nt":
@@ -269,7 +273,7 @@ class GUI:
             pyautogui.write(self.typewriter_queue.get(), _pause=False)  # Keyboard input happens here
 
         while not self.hand_landmarks_queue.empty():
-            self.hand.update(self.hand_landmarks_queue.get())  # Update the hand landmarks from the queue
+            self.hand.update(self.hand_landmarks_queue.get(block=False))  # Update the hand landmarks from the queue
 
         if not self.hand.is_missing:
             hand_coords = self.hand.coordinates_of(self.current_pointer_source)
@@ -299,15 +303,15 @@ class GUI:
                 case HandEvent.MOUSE_SCROLL:
                     self.pinch_scroll(x, y)
                 case HandEvent.VOLUME_UP:
-                    pyautogui.press("volumeUp", _pause=False)
+                    pyautogui.press("volumeup", _pause=False)
                 case HandEvent.VOLUME_DOWN:
-                    pyautogui.press("volumeDown", _pause=False)
+                    pyautogui.press("volumedown", _pause=False)
                 case HandEvent.COPY_TEXT:
                     if self.allow_click():
-                        pyautogui.hotkey("ctrl", "c",)
+                        pyautogui.hotkey("ctrl", "c", )
                 case HandEvent.PASTE_TEXT:
                     if self.allow_click():
-                        pyautogui.hotkey("ctrl", "v",)
+                        pyautogui.hotkey("ctrl", "v", )
                 case _:
                     self.prev_x, self.prev_y = None, None
         else:

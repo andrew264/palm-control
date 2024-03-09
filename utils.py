@@ -14,6 +14,7 @@ def _rescale_landmarks(landmarks: np.ndarray, height: int, width: int) -> list:
 
 
 def draw_landmarks_on_image(_img: np.ndarray, _points: np.ndarray):
+    _img = np.copy(_img)
     _points = _rescale_landmarks(_points, *_img.shape[:2])
     colors = [(0, 0, 0), (255, 255, 255)]
 

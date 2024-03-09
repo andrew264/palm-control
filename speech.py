@@ -33,6 +33,7 @@ class SpeechThread(mp.Process):
                 # compile the model
                 print("Compiling the whisper model...")
                 torch.compile(model=self.whisper_model.forward, fullgraph=True, mode='max-autotune')
+                print("Done compiling the whisper model")
             elif os.name == 'nt':
                 print("Windows does not support torch.jit.compile yet; skipping...")
         while True:
