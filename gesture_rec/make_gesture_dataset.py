@@ -126,7 +126,7 @@ class VideoGUI:
 
     def get_top_guesses(self, landmarks: np.ndarray, k: int = 3) -> list[str]:
         assert self.gesture_model is not None, "Gesture model is not loaded"
-        landmarks = normalize_landmarks(landmarks).flatten()
+        landmarks = normalize_landmarks(landmarks)
         outputs = self.gesture_model(torch.tensor(landmarks).unsqueeze(0))
         top_k = torch.topk(outputs, k)
         top_k_labels = [self.choices[i] for i in top_k.indices[0].tolist()]

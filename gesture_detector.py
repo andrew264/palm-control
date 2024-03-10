@@ -131,7 +131,7 @@ class GestureDetectorProMax:
         coordinates = self.hand.coordinates
         if coordinates is None:
             return "NONE"
-        coordinates = normalize_landmarks(coordinates).flatten()
+        coordinates = normalize_landmarks(coordinates)
         outputs = self.model(torch.tensor(coordinates).unsqueeze(0))
         _, predicted = torch.max(outputs, 1)
         return self.labels[predicted]

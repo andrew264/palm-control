@@ -29,7 +29,7 @@ class GestureDataset(Dataset):
         label = self.data[idx]["label"]
         if self.apply_random_rotation:
             landmarks = random_rotate_points(landmarks)
-        return normalize_landmarks(landmarks).flatten(), self.label_to_idx[label]
+        return normalize_landmarks(landmarks), self.label_to_idx[label]
 
 
 def train_model(model: GestureFFN, dataset: GestureDataset, save_path: str, epochs=10, batch_size=32):
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     num_classes = len(labels)
 
     # da model
-    model_ = GestureFFN(input_size=21 * 3, hidden_size=512, output_size=num_classes)
+    model_ = GestureFFN(input_size=21 * 3, hidden_size=128, output_size=num_classes)
     model_.train()
     train_model(model_, data, model_save_path, epochs=1000, batch_size=32)
     model_.eval()
