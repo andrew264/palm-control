@@ -1,3 +1,4 @@
+import contextlib
 import os
 import time
 import tkinter as tk
@@ -66,9 +67,10 @@ class GUI:
 
         # Hand Tracking Thread
         self._last_video_frame = EMPTY_FRAME.copy()
+        self._last_video_frame_time = time.time()
         self.hand = Hand(enable_smoothing=True, axis_dim=3, smoothness=DEFAULT_TRACKING_SMOOTHNESS)
-        self.video_frame_queue = Queue(maxsize=30)
-        self.hand_landmarks_queue = Queue(maxsize=30)
+        self.video_frame_queue = Queue(maxsize=3)
+        self.hand_landmarks_queue = Queue(maxsize=3)
         self.tracking_thread = HandTrackingThread(landmark_queue=self.hand_landmarks_queue,
                                                   frame_queue=self.video_frame_queue,
                                                   num_hands=NUM_HANDS,
@@ -160,15 +162,22 @@ class GUI:
     def get_tracking_frame(self) -> np.ndarray:
         if self.show_webcam_var.get() == 1:
             if not self.video_frame_queue.empty():
-                self._last_video_frame = self.video_frame_queue.get(block=False)
+                self._last_video_frame = self.video_frame_queue.get_nowait()
+            new_time = time.time()
+            fps = 1 / (new_time - self._last_video_frame_time)
+            self._last_video_frame_time = new_time
         else:
             self._last_video_frame = EMPTY_FRAME.copy()
             while not self.video_frame_queue.empty():
-                self.video_frame_queue.get(block=False)
+                self.video_frame_queue.get_nowait()
+            fps = None
         if self.hand.coordinates_2d is not None:
             frame = draw_landmarks_on_image(self._last_video_frame, self.hand.coordinates_2d)
             cv2.putText(frame, f"Event: {self.current_event.name}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         1, (255, 255, 255), 2)
+            if fps is not None:
+                cv2.putText(frame, f"FPS: {fps:.2f}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX,
+                            1, (255, 255, 255), 2)
             return frame
         else:
             return self._last_video_frame
@@ -194,66 +203,73 @@ class GUI:
         self.root.mainloop()
 
     def do_mouse_movement(self, x: Optional[float], y: Optional[float]):
-        if not (x and y):
+        if x is None or y is None:
+            # Reset previous coordinates if x or y is None
             self.prev_x, self.prev_y = None, None
             return
 
         if self.prev_x is None or self.prev_y is None:
+            # Initialize previous coordinates if not already set
             self.prev_x, self.prev_y = x, y
             return
 
         # Smooth the mouse movement
         alpha = self.mouse_smoothness_alpha
-        x = self.prev_x * (1 - alpha) + x * alpha
-        y = self.prev_y * (1 - alpha) + y * alpha
+        x_smoothed = self.prev_x * (1 - alpha) + x * alpha
+        y_smoothed = self.prev_y * (1 - alpha) + y * alpha
 
-        distance = ((x - self.prev_x) ** 2 + (y - self.prev_y) ** 2) ** .5
+        distance = ((x_smoothed - self.prev_x) ** 2 + (y_smoothed - self.prev_y) ** 2) ** .5
         if distance < 1e-3:
             return
         multiplier = max(distance * 25, 1.)
 
-        dx = (x - self.prev_x) * multiplier
-        dy = (y - self.prev_y) * multiplier
+        dx = (x_smoothed - self.prev_x) * multiplier
+        dy = (y_smoothed - self.prev_y) * multiplier
 
-        # Calculate the new coordinates
-        A1, B1 = pyautogui.position()
-        A2 = (SCREEN_WIDTH * dx) + A1
-        B2 = (SCREEN_HEIGHT * dy) + B1
+        # Calculate new coordinates
+        current_x, current_y = pyautogui.position()
+        new_x = current_x + dx * SCREEN_WIDTH
+        new_y = current_y + dy * SCREEN_HEIGHT
 
+        # Update previous coordinates
         self.prev_x, self.prev_y = x, y
 
-        pyautogui.moveTo(int(A2), int(B2), _pause=False)
+        pyautogui.moveTo(int(new_x), int(new_y), _pause=False)
 
     def pinch_scroll(self, x: Optional[float], y: Optional[float]):
-        if not (x and y):
+        if x is None or y is None:
+            # Reset previous coordinates if x or y is None
             self.prev_x, self.prev_y = None, None
             return
 
         if self.prev_x is None or self.prev_y is None:
+            # Initialize previous coordinates if not already set
             self.prev_x, self.prev_y = x, y
             return
 
-        y_dist = y - self.prev_y
-        x_dist = x - self.prev_x
-        if abs(y_dist) < 1e-3 and abs(x_dist) < 1e-3:
+        # Calculate the change in coordinates
+        y_delta = y - self.prev_y
+        x_delta = x - self.prev_x
+
+        # Check if movement is significant
+        if abs(y_delta) < 1e-3 and abs(x_delta) < 1e-3:
             return
-        if abs(y_dist) > abs(x_dist):
-            if os.name == "nt":
-                scale = 1e4
-            else:
-                scale = 3e1
-            pyautogui.scroll(int(y_dist * scale), _pause=False)
+
+        # Determine the scaling factor based on the operating system
+        if os.name == "nt":
+            y_scale = 1e4 if abs(y_delta) > abs(x_delta) else 5e4
         else:
-            if os.name == "nt":
-                scale = 5e4
-            else:
-                scale = 5e2
-            with pyautogui.hold("shift"):
-                pyautogui.scroll(int(y_dist * scale), _pause=False)
+            y_scale = 3e1 if abs(y_delta) > abs(x_delta) else 5e2
+
+        # Apply shift key modifier if scrolling horizontally
+        with pyautogui.hold("shift") if abs(y_delta) <= abs(x_delta) else contextlib.suppress():
+            # Perform the scroll action
+            pyautogui.scroll(int(y_delta * y_scale), _pause=False)
+
         self.prev_x, self.prev_y = x, y
 
     def allow_click(self):
-        if time.time() - self.last_click_time > 1.0:
+        if time.time() - self.last_click_time > 0.5:
             self.last_click_time = time.time()
             return True
         return False
@@ -268,6 +284,22 @@ class GUI:
             self.is_mouse_button_down = False
             pyautogui.mouseUp(button='left', _pause=False)
 
+    def do_lmb_click(self):
+        if self.allow_click():
+            pyautogui.leftClick(_pause=False)
+
+    def do_rmb_click(self):
+        if self.allow_click():
+            pyautogui.rightClick(_pause=False)
+
+    def do_copy_text(self):
+        if self.allow_click():
+            pyautogui.hotkey("ctrl", "c")
+
+    def do_paste_text(self):
+        if self.allow_click():
+            pyautogui.hotkey("ctrl", "v")
+
     def process_loop(self):
         while not self.typewriter_queue.empty():
             pyautogui.write(self.typewriter_queue.get(), _pause=False)  # Keyboard input happens here
@@ -281,7 +313,10 @@ class GUI:
                 x, y, _ = hand_coords.tolist()
             else:
                 x, y = None, None
+
+            # Detect the current event
             self.current_event = self.gesture_detector.detect()
+
             if self.current_event != HandEvent.MOUSE_DRAG and self.is_mouse_button_down:
                 self.disable_mouse_drag()
             match self.current_event:
@@ -289,15 +324,12 @@ class GUI:
                     self.enable_mouse_drag()
                     self.do_mouse_movement(x, y)
                 case HandEvent.MOUSE_CLICK:
-                    if self.allow_click():
-                        pyautogui.click(_pause=False)
+                    self.do_lmb_click()
                 case HandEvent.MOUSE_RIGHT_CLICK:
-                    if self.allow_click():
-                        pyautogui.rightClick(_pause=False)
+                    self.do_rmb_click()
                 case HandEvent.AUDIO_INPUT:
                     if self.audio_thread_communication_queue.empty():
-                        self.audio_thread_communication_queue.put(True)
-                    self.prev_x, self.prev_y = None, None
+                        self.audio_thread_communication_queue.put_nowait(True)
                 case HandEvent.MOUSE_MOVE:
                     self.do_mouse_movement(x, y)
                 case HandEvent.MOUSE_SCROLL:
@@ -307,11 +339,9 @@ class GUI:
                 case HandEvent.VOLUME_DOWN:
                     pyautogui.press("volumedown", _pause=False)
                 case HandEvent.COPY_TEXT:
-                    if self.allow_click():
-                        pyautogui.hotkey("ctrl", "c", )
+                    self.do_copy_text()
                 case HandEvent.PASTE_TEXT:
-                    if self.allow_click():
-                        pyautogui.hotkey("ctrl", "v", )
+                    self.do_paste_text()
                 case _:
                     self.prev_x, self.prev_y = None, None
         else:

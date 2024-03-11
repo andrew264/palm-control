@@ -41,14 +41,13 @@ class HandTrackingThread(multiprocessing.Process):
                 break
             image = cv2.flip(frame, 1)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            self.frame_queue.put(image.copy(), timeout=1, block=False)
-            while self.frame_queue.qsize() > 1:
-                self.frame_queue.get()
+            if not self.frame_queue.full():
+                self.frame_queue.put_nowait(image.copy())
             results = self.detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=image), counter)
             counter += 1
+            landmarks = None
             if hand_landmarks := results.hand_landmarks:
                 landmarks = np.array([[landmark.x, landmark.y, landmark.z] for landmark in hand_landmarks[0]])
-                self.landmark_queue.put(landmarks, block=False, timeout=0)
-            else:
-                self.landmark_queue.put(None, block=False, timeout=0)
+            if not self.landmark_queue.full():
+                self.landmark_queue.put_nowait(landmarks)
         cap.release()
