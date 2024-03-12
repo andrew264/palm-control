@@ -112,3 +112,12 @@ class HandEvent(enum.IntEnum):
     COPY_TEXT = 8
     PASTE_TEXT = 9
     MOUSE_NO_EVENT = 10
+
+
+class GUIEvents(enum.IntEnum):
+    """GUI Events."""
+    TRACKING_SMOOTHNESS = 0
+    MOUSE_SMOOTHNESS = 1
+    SHOW_WEBCAM = 2
+    MOUSE_POINTER = 3
+    EXIT = 4
