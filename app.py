@@ -14,7 +14,7 @@ class GUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Palm Control GUI")
-        self.root.geometry(f"{WIDTH}x{HEIGHT + 125}")
+        self.root.geometry(f"{WIDTH}x{HEIGHT + 150}")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.resizable(False, False)
         self.root.bind("<Escape>", lambda e: self.on_close())
@@ -46,7 +46,7 @@ class GUI:
         self.mouse_pointer_dropdown = None
 
         # Queues
-        self.tracking_image_queue = Queue(maxsize=1)
+        self.tracking_image_queue = Queue(maxsize=3)
         self.gui_event_queue = Queue(maxsize=10)
         self.event_processor = EventProcessor(self.gui_event_queue, self.tracking_image_queue)
         self.event_processor.start()
@@ -80,7 +80,7 @@ class GUI:
 
         self.show_webcam_var = tk.IntVar(value=0)
         self.show_webcam_checkbox = ttk.Checkbutton(tracking_frame, text="Show Webcam", variable=self.show_webcam_var,
-                                                    style="TCheckbutton")
+                                                    style="TCheckbutton", command=self.update_show_webcam)
         self.show_webcam_checkbox.pack(side="left", padx=40)
 
         mouse_frame = ttk.Frame(self.controls_frame)
@@ -116,6 +116,10 @@ class GUI:
 
     def update_mouse_pointer(self, event):
         self.gui_event_queue.put((GUIEvents.MOUSE_POINTER, self.mouse_pointer_source.get()))
+
+    def update_show_webcam(self):
+        boolean_value = True if self.show_webcam_var.get() == 1 else False
+        self.gui_event_queue.put((GUIEvents.SHOW_WEBCAM, boolean_value))
 
     def get_tracking_frame(self):
         if not self.tracking_image_queue.empty():
