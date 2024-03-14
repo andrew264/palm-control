@@ -46,10 +46,9 @@ class GUI:
         self.mouse_pointer_dropdown = None
 
         # Queues
-        self.tracking_image_queue = Queue(maxsize=3)
+        self.tracking_image_queue = Queue(maxsize=6)
         self.gui_event_queue = Queue(maxsize=10)
         self.event_processor = EventProcessor(self.gui_event_queue, self.tracking_image_queue)
-        self.event_processor.start()
 
         self.create_widgets()
         self.update_frame()
@@ -60,7 +59,8 @@ class GUI:
         self.root.destroy()
 
     def create_widgets(self):
-        self.tracking_image_label = ttk.Label(self.root)
+        self.event_processor.start()
+        self.tracking_image_label = ttk.Label(self.root, style="TLabel")
         self.tracking_image_label.pack()
 
         self.controls_frame = ttk.Frame(self.root, padding=10)
@@ -123,8 +123,7 @@ class GUI:
 
     def get_tracking_frame(self):
         if not self.tracking_image_queue.empty():
-            frame = self.tracking_image_queue.get()
-            return frame
+            return self.tracking_image_queue.get()
         return EMPTY_FRAME.copy()
 
     def update_frame(self):

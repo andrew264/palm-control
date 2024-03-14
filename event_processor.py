@@ -48,6 +48,14 @@ class EventProcessor(Process):
         self._last_video_frame_time = time.time()
         self.video_frame_queue = Queue(maxsize=3)
         self.hand_landmarks_queue = Queue(maxsize=3)
+        self.tracking_thread = None
+
+        # Audio Transcription
+        self.audio_thread_communication_queue = Queue(maxsize=1)
+        self.typewriter_queue = Queue(maxsize=1)
+        self.audio_thread = None
+
+    def create_threads(self):
         self.tracking_thread = HandTrackingThread(landmark_queue=self.hand_landmarks_queue,
                                                   frame_queue=self.video_frame_queue,
                                                   num_hands=NUM_HANDS,
@@ -55,13 +63,19 @@ class EventProcessor(Process):
                                                   camera_id=CAMERA_ID,
                                                   camera_width=WIDTH, camera_height=HEIGHT, camera_fps=FPS)
         self.tracking_thread.start()
+        print("Tracking thread started")
 
-        # Audio Transcription
-        self.audio_thread_communication_queue = Queue(maxsize=1)
-        self.typewriter_queue = Queue(maxsize=1)
         self.audio_thread = SpeechThread(signal_queue=self.audio_thread_communication_queue,
                                          typewriter_queue=self.typewriter_queue)
-        self.audio_thread.start()  # Start the thread to avoid latency when the user starts speaking
+        self.audio_thread.start()
+        print("Audio thread started")
+
+    def terminate(self):
+        if self.tracking_thread is not None:
+            self.tracking_thread.terminate()
+        if self.audio_thread is not None:
+            self.audio_thread.terminate()
+        super(EventProcessor, self).terminate()
 
     def get_tracking_frame(self) -> np.ndarray:
         if self.show_webcam:
@@ -193,8 +207,6 @@ class EventProcessor(Process):
                 event, value = item, None
             match event:
                 case GUIEvents.EXIT:
-                    self.tracking_thread.terminate()
-                    self.audio_thread.terminate()
                     self.terminate()
                 case GUIEvents.SHOW_WEBCAM:
                     assert isinstance(value, bool)
@@ -226,6 +238,10 @@ class EventProcessor(Process):
             self.hand.update(self.hand_landmarks_queue.get(block=False))  # Update the hand landmarks from the queue
 
     def run(self):
+        try:
+            self.create_threads()
+        except AssertionError as e:
+            print(e)
         while True:
             self.handle_events()
             self.update_tracking_frame()

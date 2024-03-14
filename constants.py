@@ -4,7 +4,7 @@ from typin import HandLandmark
 
 # Camera
 WIDTH, HEIGHT = 1280, 720
-FPS = 30
+FPS = 60
 CAMERA_ID = 0
 EMPTY_FRAME = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
 
