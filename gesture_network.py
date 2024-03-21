@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from typin import HAND_LANDMARK_ANGLES, HAND_LANDMARK_DISTANCES
 
@@ -13,12 +14,14 @@ class GestureFFN(nn.Module):
         self.coord_proj = nn.Linear(input_size, hidden_size)
         self.rad_proj = nn.Linear(len(HAND_LANDMARK_ANGLES), hidden_size)
         self.dist_proj = nn.Linear(len(HAND_LANDMARK_DISTANCES), hidden_size)
-        self.down_proj = nn.Linear(3 * hidden_size, output_size)
-        self.act = nn.SiLU()
+        self.coord_norm = nn.LayerNorm(hidden_size)
+        self.rad_norm = nn.LayerNorm(hidden_size)
+        self.dist_norm = nn.LayerNorm(hidden_size)
         self.dropout = nn.Dropout(p=0.5)
-        self.softmax = nn.Softmax(dim=1)
+        self.down_proj = nn.Linear(3 * hidden_size, output_size)
 
     @staticmethod
+    @torch.no_grad()
     def get_rad(landmarks: torch.Tensor) -> torch.Tensor:
         """
         Returns the radians of the angles between the landmarks.
@@ -32,6 +35,7 @@ class GestureFFN(nn.Module):
         return radians
 
     @staticmethod
+    @torch.no_grad()
     def get_dist(landmarks: torch.Tensor) -> torch.Tensor:
         """
         Returns the distances between the landmarks.
@@ -41,12 +45,11 @@ class GestureFFN(nn.Module):
         return dists
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        assert x.shape[1:] == (21, 3)
-        cp = self.coord_proj(x.flatten(start_dim=1))
-        rad = self.rad_proj(self.get_rad(x))
-        dist = self.dist_proj(self.get_dist(x))
+        cp = self.coord_norm(self.coord_proj(x.flatten(start_dim=1)))
+        rad = self.rad_norm(self.rad_proj(self.get_rad(x)))
+        dist = self.dist_norm(self.dist_proj(self.get_dist(x)))
         x = torch.cat([cp, rad, dist], dim=-1)
-        x = self.act(x)
+        x = F.relu(x)
         x = self.dropout(x)
         x = self.down_proj(x)
-        return self.softmax(x)
+        return x

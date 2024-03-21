@@ -10,7 +10,9 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image, ImageTk
+from onnxruntime import InferenceSession
 
 sys.path.insert(0, '../')
 
@@ -42,7 +44,7 @@ def get_landmarks(frame: np.ndarray, frame_count: int) -> Optional[np.ndarray]:
 
 
 class VideoGUI:
-    def __init__(self, choices: List[str], g_model=None):
+    def __init__(self, choices: List[str], g_model: Optional[InferenceSession] = None):
         self.gesture_model = g_model
         self.choices = choices
         self.master = tk.Tk()
@@ -126,8 +128,10 @@ class VideoGUI:
 
     def get_top_guesses(self, landmarks: np.ndarray, k: int = 3) -> list[str]:
         assert self.gesture_model is not None, "Gesture model is not loaded"
-        landmarks = normalize_landmarks(landmarks)
-        outputs = self.gesture_model(torch.tensor(landmarks).unsqueeze(0))
+        landmarks = np.expand_dims(normalize_landmarks(landmarks), axis=0)
+        onnxruntime_input = {k.name: v for k, v in zip(self.gesture_model.get_inputs(), [landmarks])}
+        outputs = self.gesture_model.run(None, onnxruntime_input)
+        outputs = F.softmax(torch.tensor(outputs[0]), dim=1)
         top_k = torch.topk(outputs, k)
         top_k_labels = [self.choices[i] for i in top_k.indices[0].tolist()]
         top_k_probs = top_k.values[0].tolist()
@@ -171,13 +175,13 @@ if __name__ == '__main__':
         raise FileNotFoundError(f"File {choices_file} not found")
     labels = get_gesture_class_labels(choices_file)
 
-    model_save_path = "./models/gesture_model.pth"
+    model_save_path = "./models/gesture_model.onnx"
     if not os.path.exists(model_save_path):
         print(f"File {model_save_path} not found; not loading the gesture model")
         gesture_model = None
     else:
-        from utils import load_gesture_model
+        from utils import load_onnx_model
 
-        gesture_model = load_gesture_model(model_save_path, len(labels))
+        gesture_model = load_onnx_model(model_save_path)
     video_gui = VideoGUI(choices=labels, g_model=gesture_model)
     video_gui.master.mainloop()

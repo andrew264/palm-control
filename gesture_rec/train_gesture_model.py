@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
 from gesture_network import GestureFFN
@@ -42,6 +43,7 @@ def train_model(model: GestureFFN, dataset: GestureDataset, save_path: str, epoc
         for landmarks, target in dataloader:
             optimizer.zero_grad()
             outputs = model(landmarks)
+            outputs = F.softmax(outputs, dim=1)
             loss = criterion(outputs, target)
             loss.backward()
             optimizer.step()
@@ -52,7 +54,6 @@ def train_model(model: GestureFFN, dataset: GestureDataset, save_path: str, epoc
             loss = accum_loss / len(dataloader)
             accuracy = accum_accuracy / len(dataloader)
             print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}")
-    torch.save(model.state_dict(), save_path)
 
 
 def stats(model: GestureFFN, dataset: GestureDataset):
@@ -92,6 +93,11 @@ if __name__ == "__main__":
     # da model
     model_ = GestureFFN(input_size=21 * 3, hidden_size=128, output_size=num_classes)
     model_.train()
-    train_model(model_, data, model_save_path, epochs=1000, batch_size=32)
+    train_model(model_, data, model_save_path, epochs=1000, batch_size=128)
     model_.eval()
     stats(model_, GestureDataset(file_path=dataset_file, _labels=labels))
+
+    # export model to onnx
+    dummy_input = torch.randn(1, 21, 3)
+    torch.onnx.export(model_, dummy_input, "./models/gesture_model.onnx", verbose=False)
+    print("Model exported to ONNX")

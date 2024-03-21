@@ -1,23 +1,25 @@
+import numpy as np
 import torch
 
 from hand import Hand
 from typin import HandEvent
-from utils import load_gesture_model, normalize_landmarks, get_gesture_class_labels
+from utils import normalize_landmarks, get_gesture_class_labels, load_onnx_model
 
 
 class GestureDetectorProMax:
     def __init__(self, hand: Hand, model_path: str, labels_path: str):
         self.hand = hand
         self.labels = get_gesture_class_labels(labels_path)
-        self.model = load_gesture_model(model_path, len(self.labels))
+        self.model = load_onnx_model(model_path)
 
     def _do_inference(self) -> str:
         coordinates = self.hand.coordinates
         if coordinates is None:
             return "NONE"
-        coordinates = normalize_landmarks(coordinates)
-        outputs = self.model(torch.tensor(coordinates).unsqueeze(0))
-        _, predicted = torch.max(outputs, 1)
+        coordinates = np.expand_dims(normalize_landmarks(coordinates), axis=0)
+        onnxruntime_input = {k.name: v for k, v in zip(self.model.get_inputs(), [coordinates])}
+        outputs = self.model.run(None, onnxruntime_input)[0]
+        predicted = torch.argmax(torch.tensor(outputs), dim=1).item()
         return self.labels[predicted]
 
     def detect(self) -> HandEvent:

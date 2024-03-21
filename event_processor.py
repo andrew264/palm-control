@@ -39,8 +39,7 @@ class EventProcessor(Process):
 
         self.hand = Hand(enable_smoothing=True, axis_dim=3, smoothness=DEFAULT_TRACKING_SMOOTHNESS)
 
-        self.gesture_detector = GestureDetectorProMax(self.hand, model_path='./models/gesture_model.pth',
-                                                      labels_path='./gesture_rec/choices.txt')
+        self.gesture_detector = None
         self.current_pointer_source: HandLandmark = DEFAULT_POINTER_SOURCE
 
         # Hand Tracking Thread
@@ -69,6 +68,10 @@ class EventProcessor(Process):
                                          typewriter_queue=self.typewriter_queue)
         self.audio_thread.start()
         print("Audio thread started")
+
+    def load_gesture_detector(self):
+        self.gesture_detector = GestureDetectorProMax(self.hand, model_path='./models/gesture_model.onnx',
+                                                      labels_path='./gesture_rec/choices.txt')
 
     def terminate(self):
         if self.tracking_thread is not None:
@@ -240,6 +243,7 @@ class EventProcessor(Process):
     def run(self):
         try:
             self.create_threads()
+            self.load_gesture_detector()
         except AssertionError as e:
             print(e)
         while True:

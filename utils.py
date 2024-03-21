@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import torch
+from onnxruntime import InferenceSession
 
 from typin import HAND_CONNECTIONS
 
@@ -95,17 +95,10 @@ def load_mediapipe_model(num_hands: int = 2, model_path: str = './models/hand_la
     return detector
 
 
-def load_gesture_model(model_path: str, num_classes: int) -> torch.nn.Module:
-    from gesture_network import GestureFFN
-    model = GestureFFN(input_size=21 * 3, hidden_size=128, output_size=num_classes)
-    try:
-        model.load_state_dict(torch.load(model_path))
-    except RuntimeError:
-        print(f"Failed to load weights possibly due to a mismatch in the number of classes")
-        print(f"Loading model without weights")
-    model.cpu()
-    model.eval()
-    return model
+def load_onnx_model(model_path: str) -> InferenceSession:
+    import onnxruntime as ort
+    ort_session = ort.InferenceSession(model_path, providers=['CPUExecutionProvider'])
+    return ort_session
 
 
 def normalize_landmarks(landmarks: np.ndarray) -> np.ndarray:
