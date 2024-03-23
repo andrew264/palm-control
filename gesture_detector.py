@@ -1,9 +1,8 @@
-import numpy as np
 import torch
 
 from hand import Hand
 from typin import HandEvent
-from utils import normalize_landmarks, get_gesture_class_labels, load_onnx_model
+from utils import get_gesture_class_labels, load_onnx_model, run_inference_on_onnx_model
 
 
 class GestureDetectorProMax:
@@ -16,9 +15,7 @@ class GestureDetectorProMax:
         coordinates = self.hand.coordinates
         if coordinates is None:
             return "NONE"
-        coordinates = np.expand_dims(normalize_landmarks(coordinates), axis=0)
-        onnxruntime_input = {k.name: v for k, v in zip(self.model.get_inputs(), [coordinates])}
-        outputs = self.model.run(None, onnxruntime_input)[0]
+        outputs = run_inference_on_onnx_model(self.model, coordinates)
         predicted = torch.argmax(torch.tensor(outputs), dim=1).item()
         return self.labels[predicted]
 

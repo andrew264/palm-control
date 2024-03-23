@@ -13,7 +13,7 @@ Pillow
 IPython
 jupyter
 torch
-sv_ttk
+sv-ttk
 onnx
 onnxscript
 onnxruntime

@@ -9,16 +9,27 @@ HAND_LANDMARK_ANGLES = torch.tensor(HAND_LANDMARK_ANGLES)
 
 
 class GestureFFN(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, output_size: int):
+    def __init__(self, hidden_size: int, output_size: int):
         super(GestureFFN, self).__init__()
-        self.coord_proj = nn.Linear(input_size, hidden_size)
-        self.rad_proj = nn.Linear(len(HAND_LANDMARK_ANGLES), hidden_size)
-        self.dist_proj = nn.Linear(len(HAND_LANDMARK_DISTANCES), hidden_size)
+        n_dim = 3
+        self.coord_conv1 = nn.Conv1d(in_channels=n_dim, out_channels=hidden_size // 8,
+                                     kernel_size=n_dim, stride=1, padding=1)
+        self.coord_conv2 = nn.Conv1d(in_channels=hidden_size // 8, out_channels=hidden_size // 4,
+                                     kernel_size=n_dim, stride=1, padding=1)
+        self.coord_conv3 = nn.Conv1d(in_channels=hidden_size // 4, out_channels=hidden_size // 2,
+                                     kernel_size=n_dim, stride=1, padding=1)
+        self.pooling = nn.MaxPool1d(kernel_size=2)
         self.coord_norm = nn.LayerNorm(hidden_size)
+
+        self.rad_proj = nn.Linear(len(HAND_LANDMARK_ANGLES), hidden_size)
         self.rad_norm = nn.LayerNorm(hidden_size)
+
+        self.dist_proj = nn.Linear(len(HAND_LANDMARK_DISTANCES), hidden_size)
         self.dist_norm = nn.LayerNorm(hidden_size)
         self.dropout = nn.Dropout(p=0.5)
         self.down_proj = nn.Linear(3 * hidden_size, output_size)
+
+        self.act = F.relu
 
     @staticmethod
     @torch.no_grad()
@@ -44,12 +55,22 @@ class GestureFFN(nn.Module):
             landmarks[:, HAND_LANDMARK_DISTANCES[:, 0]] - landmarks[:, HAND_LANDMARK_DISTANCES[:, 1]], dim=-1)
         return dists
 
+    def convoluted_forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Some convoluted shit is going on here...
+        """
+        x = x.permute(0, 2, 1)
+        x = self.pooling(self.act(self.coord_conv1(x)))
+        x = self.pooling(self.act(self.coord_conv2(x)))
+        x = self.pooling(self.act(self.coord_conv3(x)))
+        return x.view(x.size(0), -1)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        cp = self.coord_norm(self.coord_proj(x.flatten(start_dim=1)))
-        rad = self.rad_norm(self.rad_proj(self.get_rad(x)))
-        dist = self.dist_norm(self.dist_proj(self.get_dist(x)))
+        rad = self.rad_norm(self.act(self.rad_proj(self.get_rad(x))))
+        dist = self.dist_norm(self.act(self.dist_proj(self.get_dist(x))))
+        cp = self.coord_norm(self.convoluted_forward(x))
+
         x = torch.cat([cp, rad, dist], dim=-1)
-        x = F.relu(x)
         x = self.dropout(x)
         x = self.down_proj(x)
         return x

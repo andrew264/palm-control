@@ -1,5 +1,8 @@
+from typing import Union
+
 import cv2
 import numpy as np
+import torch
 from onnxruntime import InferenceSession
 
 from typin import HAND_CONNECTIONS
@@ -9,11 +12,11 @@ def _landmarks_list_to_array(landmark_list) -> np.ndarray:
     return np.array([[point.x, point.y, point.z] for point in landmark_list])
 
 
-def _rescale_landmarks(landmarks: np.ndarray, height: int, width: int) -> list:
+def _rescale_landmarks(landmarks: Union[np.ndarray, torch.Tensor], height: int, width: int) -> list:
     return [[int(point[0] * width), int(point[1] * height)] for point in landmarks]
 
 
-def draw_landmarks_on_image(_img: np.ndarray, _points: np.ndarray):
+def draw_landmarks_on_image(_img: np.ndarray, _points: Union[np.ndarray, torch.Tensor]):
     _img = np.copy(_img)
     _points = _rescale_landmarks(_points, *_img.shape[:2])
     colors = [(0, 0, 0), (255, 255, 255)]
@@ -101,54 +104,71 @@ def load_onnx_model(model_path: str) -> InferenceSession:
     return ort_session
 
 
-def normalize_landmarks(landmarks: np.ndarray) -> np.ndarray:
-    assert isinstance(landmarks, np.ndarray), "Landmarks must be a numpy array"
-    assert landmarks.shape[1] == 3, "Landmarks must be in 3D space"
-    n_landmarks = np.float32(landmarks)
+def run_inference_on_onnx_model(model: InferenceSession, input_data: np.ndarray) -> np.ndarray:
+    input_data = np.expand_dims(normalize_landmarks(input_data).astype(np.float32), axis=0)
+    input_data = {k.name: v for k, v in zip(model.get_inputs(), [input_data])}
+    return model.run(None, input_data)[0]
 
-    min_vals = np.min(n_landmarks, axis=0)
-    max_vals = np.max(n_landmarks, axis=0)
+
+def normalize_landmarks(landmarks: np.ndarray) -> np.ndarray:
+    """
+    Normalize landmarks in 3D space.
+    """
+    assert landmarks.shape[1] == 3, "Landmarks must be in 3D space"
+
+    min_vals = np.min(landmarks, axis=0)
+    max_vals = np.max(landmarks, axis=0)
 
     ranges = max_vals - min_vals
     ranges[ranges == 0] = 1.0
 
-    return (n_landmarks - min_vals) / ranges
+    return (landmarks - min_vals) / ranges
 
 
-def rotate_points(points: np.ndarray, angle_x: float, angle_y: float, angle_z: float) -> np.ndarray:
+def batch_normalize_landmarks(landmarks: torch.Tensor) -> torch.Tensor:
     """
-    Rotate points in 3D space around the x, y, and z axes.
+    Apply normalization to landmarks in 3D space.
+    Must be in Batch x 21 x 3 format.
     """
-    assert isinstance(points, np.ndarray), "Points must be a numpy array"
-    assert points.shape[1] == 3, "Points must be in 3D space"
-    angle_x = np.radians(angle_x)
-    angle_y = np.radians(angle_y)
-    angle_z = np.radians(angle_z)
-    Rx = np.array([[1, 0, 0],
-                   [0, np.cos(angle_x), -np.sin(angle_x)],
-                   [0, np.sin(angle_x), np.cos(angle_x)]])
+    min_vals = torch.min(landmarks, dim=-2)[0]
+    max_vals = torch.max(landmarks, dim=-2)[0]
 
-    Ry = np.array([[np.cos(angle_y), 0, np.sin(angle_y)],
-                   [0, 1, 0],
-                   [-np.sin(angle_y), 0, np.cos(angle_y)]])
+    ranges = max_vals - min_vals
+    ranges[ranges == 0] = 1.0
 
-    Rz = np.array([[np.cos(angle_z), -np.sin(angle_z), 0],
-                   [np.sin(angle_z), np.cos(angle_z), 0],
-                   [0, 0, 1]])
-
-    rotated_points = points.dot(Rx).dot(Ry).dot(Rz)
-
-    return rotated_points
+    return (landmarks - min_vals.unsqueeze(-2)) / ranges.unsqueeze(-2)
 
 
-def random_rotate_points(points: np.ndarray, max_angle: float = 40.) -> np.ndarray:
+def batch_rotate_points(points: torch.Tensor, max_angle: int) -> torch.Tensor:
     """
-    Randomly rotate points in 3D space around the x, y, and z axes.
+    Apply random rotate to points around x, y, and z axes.
+    Must be in Batch x 21 x 3 format.
     """
-    angle_x = np.random.uniform(-max_angle, max_angle)
-    angle_y = np.random.uniform(-max_angle, max_angle)
-    angle_z = np.random.uniform(-max_angle, max_angle)
-    return rotate_points(points, angle_x, angle_y, angle_z)
+    batch_size = points.shape[0]
+
+    angle_x = torch.deg2rad(torch.randint(-max_angle, max_angle, (batch_size, 1)))
+    angle_y = torch.deg2rad(torch.randint(-max_angle, max_angle, (batch_size, 1)))
+    angle_z = torch.deg2rad(torch.randint(-max_angle // 2, max_angle // 2, (batch_size, 1)))
+
+    cos_x, sin_x = torch.cos(angle_x), torch.sin(angle_x)
+    cos_y, sin_y = torch.cos(angle_y), torch.sin(angle_y)
+    cos_z, sin_z = torch.cos(angle_z), torch.sin(angle_z)
+    ones = torch.ones((batch_size, 1))
+    zeros = torch.zeros((batch_size, 1))
+
+    Rx = torch.cat([ones, zeros, zeros,
+                    zeros, cos_x, -sin_x,
+                    zeros, sin_x, cos_x], dim=1).reshape(batch_size, 3, 3)
+
+    Ry = torch.cat([cos_y, zeros, sin_y,
+                    zeros, ones, zeros,
+                    -sin_y, zeros, cos_y], dim=1).reshape(batch_size, 3, 3)
+
+    Rz = torch.cat([cos_z, -sin_z, zeros,
+                    sin_z, cos_z, zeros,
+                    zeros, zeros, ones], dim=1).reshape(batch_size, 3, 3)
+
+    return torch.matmul(torch.matmul(torch.matmul(points, Rz), Ry), Rx)
 
 
 def get_gesture_class_labels(file_path: str) -> list[str]:

@@ -16,7 +16,7 @@ from onnxruntime import InferenceSession
 
 sys.path.insert(0, '../')
 
-from utils import load_mediapipe_model, draw_landmarks_on_image, normalize_landmarks, get_gesture_class_labels
+from utils import load_mediapipe_model, draw_landmarks_on_image, get_gesture_class_labels, run_inference_on_onnx_model
 
 cap = cv2.VideoCapture(0)
 WIDTH, HEIGHT = 1280, 720
@@ -78,9 +78,9 @@ class VideoGUI:
 
     def on_close(self):
         print("Closing the application")
-        with open(dataset_json_path, "w") as f:
+        with open(dataset_json_path, "w") as _f:
             for line in dataset_json:
-                f.write(json.dumps(line) + "\n")
+                _f.write(json.dumps(line) + "\n")
         cap.release()
         self.master.destroy()
 
@@ -128,10 +128,8 @@ class VideoGUI:
 
     def get_top_guesses(self, landmarks: np.ndarray, k: int = 3) -> list[str]:
         assert self.gesture_model is not None, "Gesture model is not loaded"
-        landmarks = np.expand_dims(normalize_landmarks(landmarks), axis=0)
-        onnxruntime_input = {k.name: v for k, v in zip(self.gesture_model.get_inputs(), [landmarks])}
-        outputs = self.gesture_model.run(None, onnxruntime_input)
-        outputs = F.softmax(torch.tensor(outputs[0]), dim=1)
+        outputs = run_inference_on_onnx_model(self.gesture_model, landmarks)
+        outputs = F.softmax(torch.tensor(outputs), dim=1)
         top_k = torch.topk(outputs, k)
         top_k_labels = [self.choices[i] for i in top_k.indices[0].tolist()]
         top_k_probs = top_k.values[0].tolist()
