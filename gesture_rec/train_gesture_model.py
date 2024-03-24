@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 
@@ -5,7 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from gesture_network import GestureFFN
+from gesture_network import GestureNet
 from utils import get_gesture_class_labels, batch_normalize_landmarks, batch_rotate_points
 
 MAX_ROTATION_ANGLE = 30
@@ -49,11 +50,29 @@ def val_collate_fn(batch):
     return landmarks, torch.tensor(target)
 
 
-def train_model(model: GestureFFN, dataset: GestureDataset, epochs=10, batch_size=32):
+def plot_accuracy(accuracy_hist: list[float]):
+    import matplotlib.pyplot as plt
+    plt.plot(accuracy_hist)
+    plt.xlabel("Batch")
+    plt.ylabel("Accuracy")
+    plt.title("Accuracy over Batches")
+    plt.ylim(0, 100)
+    # plt.savefig("./gesture_rec/accuracy_history.png")
+    plt.show()
+
+
+def train_model(model: torch.nn.Module, dataset: Dataset, epochs=10, batch_size=32):
     print("Training model...")
+    model.train()
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=train_collate_fn)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=2e-4)
+    total_steps = epochs * len(dataloader)
+    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.1, total_iters=total_steps)
+
+    accuracy_hist = []
     for epoch in range(epochs):
         accum_loss = 0
         accum_accuracy = 0
@@ -68,37 +87,49 @@ def train_model(model: GestureFFN, dataset: GestureDataset, epochs=10, batch_siz
             loss = criterion(outputs, target)
             loss.backward()
             optimizer.step()
+            scheduler.step()
 
             accum_loss += loss.item()
             _, predicted = torch.max(outputs, 1)
-            accum_accuracy += (predicted == target).sum().item() / len(predicted) * 100
+            accuracy = (predicted == target).sum().item() / len(predicted) * 100
+            accum_accuracy += accuracy
+            accuracy_hist.append(accuracy)
 
         if (epoch + 1) % 25 == 0:
             loss = accum_loss / len(dataloader)
             accuracy = accum_accuracy / len(dataloader)
-            print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}")
+            print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}, "
+                  f"lr = {scheduler.get_last_lr()[0]:.6f}")
+    plot_accuracy(accuracy_hist)
 
 
-def stats(model: GestureFFN, dataset: GestureDataset):
-    correct = [0] * dataset.num_classes
-    total = [0] * dataset.num_classes
-    wrong = [0] * dataset.num_classes
+def stats(model: torch.nn.Module, dataset: Dataset, num_classes: int, labels: list[str], csv_filename: str):
+    model.eval()
+    correct = [0] * num_classes
+    total = [0] * num_classes
+    wrong = [0] * num_classes
+    wrong_predictions = []
+
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=val_collate_fn)
-    with torch.no_grad():
-        for landmarks, target in dataloader:
+    with torch.no_grad(), open(csv_filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['Index', 'True Output', 'Model Prediction'])  # Writing header
+        for (idx, (landmarks, target)) in enumerate(dataloader):
             landmarks = landmarks.to(device)
             target = target.to(device)
             outputs = model(landmarks)
             _, predicted = torch.max(outputs, 1)
             target = target.item()
             total[target] += 1
-            if predicted == target:
-                correct[target] += 1
-            else:
+            if predicted != target:
                 wrong[target] += 1
+                wrong_predictions.append((idx, target, predicted.item()))
 
-    for i in range(dataset.num_classes):
-        print(f"Accuracy of {dataset.labels[i]}: {correct[i] / total[i] * 100:.2f}%")
+        for idx, target, prediction in wrong_predictions:
+            writer.writerow([idx, labels[target], labels[prediction]])
+
+    for i in range(num_classes):
+        print(f"Accuracy of {labels[i]}: {correct[i] / total[i] * 100:.2f}%")
         print(f"Wrong predictions: {wrong[i]}/{total[i]}")
 
 
@@ -112,21 +143,17 @@ if __name__ == "__main__":
     if not os.path.exists(dataset_file):
         raise FileNotFoundError(f"File {dataset_file} not found")
 
-    model_save_path = "./models/gesture_model.pth"
-
     # load dataset
     print("Loading dataset...")
     data = GestureDataset(file_path=dataset_file, _labels=labels, )
     num_classes = len(labels)
 
     # da model
-    model_ = GestureFFN(hidden_size=128, output_size=num_classes)
+    model_ = GestureNet(hidden_size=64, output_size=num_classes).to(device)
     print(model_)
-    model_.train()
-    model_.to(device, )
-    train_model(model_, data, epochs=1000, batch_size=128)
-    model_.eval()
-    stats(model_, GestureDataset(file_path=dataset_file, _labels=labels))
+    train_model(model_, data, epochs=2000, batch_size=128)
+    stats(model_, GestureDataset(file_path=dataset_file, _labels=labels), num_classes, labels,
+          csv_filename="./gesture_rec/stats.csv")
 
     # export model to onnx
     dummy_input = torch.randn(1, 21, 3, device=device)

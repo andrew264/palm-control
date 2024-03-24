@@ -8,9 +8,9 @@ HAND_LANDMARK_DISTANCES = torch.tensor(HAND_LANDMARK_DISTANCES)
 HAND_LANDMARK_ANGLES = torch.tensor(HAND_LANDMARK_ANGLES)
 
 
-class GestureFFN(nn.Module):
+class GestureNet(nn.Module):
     def __init__(self, hidden_size: int, output_size: int):
-        super(GestureFFN, self).__init__()
+        super(GestureNet, self).__init__()
         n_dim = 3
         self.coord_conv1 = nn.Conv1d(in_channels=n_dim, out_channels=hidden_size // 8,
                                      kernel_size=n_dim, stride=1, padding=1)
@@ -26,7 +26,7 @@ class GestureFFN(nn.Module):
 
         self.dist_proj = nn.Linear(len(HAND_LANDMARK_DISTANCES), hidden_size)
         self.dist_norm = nn.LayerNorm(hidden_size)
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=0.2)
         self.down_proj = nn.Linear(3 * hidden_size, output_size)
 
         self.act = F.relu
