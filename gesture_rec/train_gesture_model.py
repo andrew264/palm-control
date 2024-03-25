@@ -129,7 +129,7 @@ def stats(model: torch.nn.Module, dataset: Dataset, num_classes: int, labels: li
             writer.writerow([idx, labels[target], labels[prediction]])
 
     for i in range(num_classes):
-        print(f"Accuracy of {labels[i]}: {correct[i] / total[i] * 100:.2f}%")
+        print(f"Accuracy for {labels[i]}: {100 * (total[i] - wrong[i]) / total[i]:.2f}%")
         print(f"Wrong predictions: {wrong[i]}/{total[i]}")
 
 
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     # da model
     model_ = GestureNet(hidden_size=64, output_size=num_classes).to(device)
     print(model_)
-    train_model(model_, data, epochs=2000, batch_size=128)
+    train_model(model_, data, epochs=2500, batch_size=256)
     stats(model_, GestureDataset(file_path=dataset_file, _labels=labels), num_classes, labels,
           csv_filename="./gesture_rec/stats.csv")
 

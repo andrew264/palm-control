@@ -114,29 +114,21 @@ def normalize_landmarks(landmarks: np.ndarray) -> np.ndarray:
     """
     Normalize landmarks in 3D space.
     """
-    assert landmarks.shape[1] == 3, "Landmarks must be in 3D space"
+    mean_vals = np.mean(landmarks, axis=0)
+    std_vals = np.std(landmarks, axis=0) + 1e-8
 
-    min_vals = np.min(landmarks, axis=0)
-    max_vals = np.max(landmarks, axis=0)
-
-    ranges = max_vals - min_vals
-    ranges[ranges == 0] = 1.0
-
-    return (landmarks - min_vals) / ranges
+    return (landmarks - mean_vals) / std_vals
 
 
 def batch_normalize_landmarks(landmarks: torch.Tensor) -> torch.Tensor:
     """
-    Apply normalization to landmarks in 3D space.
+    Apply z-score normalization to landmarks in 3D space.
     Must be in Batch x 21 x 3 format.
     """
-    min_vals = torch.min(landmarks, dim=-2)[0]
-    max_vals = torch.max(landmarks, dim=-2)[0]
+    mean_vals = torch.mean(landmarks, dim=1, keepdim=True)
+    std_vals = torch.std(landmarks, dim=1, keepdim=True) + 1e-8
 
-    ranges = max_vals - min_vals
-    ranges[ranges == 0] = 1.0
-
-    return (landmarks - min_vals.unsqueeze(-2)) / ranges.unsqueeze(-2)
+    return (landmarks - mean_vals) / std_vals
 
 
 def batch_rotate_points(points: torch.Tensor, max_angle: int) -> torch.Tensor:
