@@ -55,13 +55,24 @@ def val_collate_fn(batch):
     return landmarks, torch.tensor(target)
 
 
-def plot_accuracy(accuracy_hist: list[float]):
+def plot(accuracy_hist: list[float], loss_hist: list[float]):
     import matplotlib.pyplot as plt
-    plt.plot(accuracy_hist)
-    plt.xlabel("Batch")
-    plt.ylabel("Accuracy")
-    plt.title("Accuracy over Batches")
-    plt.ylim(0, 100)
+    ig, ax1 = plt.subplots(figsize=(10, 5))
+
+    ax1.plot(range(1, len(accuracy_hist) + 1), accuracy_hist, marker='o', color='b', label='Accuracy')
+    ax1.set_xlabel('Epochs')
+    ax1.set_ylabel('Accuracy', color='b')
+    ax1.tick_params(axis='y', labelcolor='b')
+    ax1.legend(loc='upper left')
+
+    ax2 = ax1.twinx()
+    ax2.plot(range(1, len(loss_hist) + 1), loss_hist, marker='o', color='r', label='Loss')
+    ax2.set_ylabel('Loss', color='r')
+    ax2.tick_params(axis='y', labelcolor='r')
+    ax2.legend(loc='upper right')
+
+    plt.title('Accuracy and Loss History')
+    plt.tight_layout()
     # plt.savefig("./gesture_rec/accuracy_history.png")
     plt.show()
 
@@ -73,11 +84,12 @@ def train_model(model: torch.nn.Module, dataset: Dataset, epochs=10, batch_size=
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=train_collate_fn)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=2e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4)
     total_steps = epochs * len(dataloader)
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.1, total_iters=total_steps)
 
     accuracy_hist = []
+    loss_hist = []
     for epoch in range(epochs):
         accum_loss = 0
         accum_accuracy = 0
@@ -88,8 +100,9 @@ def train_model(model: torch.nn.Module, dataset: Dataset, epochs=10, batch_size=
             target = target.to(device)
 
             outputs = model(landmarks)
-            outputs = F.softmax(outputs, dim=1)
+            outputs = F.log_softmax(outputs, dim=1)
             loss = criterion(outputs, target)
+            loss_hist.append(loss.item())
             loss.backward()
             optimizer.step()
             scheduler.step()
@@ -105,7 +118,7 @@ def train_model(model: torch.nn.Module, dataset: Dataset, epochs=10, batch_size=
             accuracy = accum_accuracy / len(dataloader)
             print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}, "
                   f"lr = {scheduler.get_last_lr()[0]:.6f}")
-    plot_accuracy(accuracy_hist)
+    plot(accuracy_hist, loss_hist)
 
 
 def stats(model: torch.nn.Module, dataset: Dataset, num_classes: int, labels: list[str], csv_filename: str):
