@@ -7,7 +7,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
 from gesture_network import GestureNet
-from utils import get_gesture_class_labels, batch_normalize_landmarks, batch_rotate_points
+from utils import (get_gesture_class_labels, batch_normalize_landmarks, batch_rotate_points, batch_horizontal_flip,
+                   batch_depth_flip)
 
 MAX_ROTATION_ANGLE = 30
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,8 +39,12 @@ class GestureDataset(Dataset):
 def train_collate_fn(batch):
     landmarks, target = zip(*batch)
     landmarks = torch.stack(landmarks)
-    landmarks = batch_rotate_points(landmarks, MAX_ROTATION_ANGLE)
     landmarks = batch_normalize_landmarks(landmarks)
+    if torch.rand(1).item() > 0.5:
+        landmarks = batch_horizontal_flip(landmarks)
+    if torch.rand(1).item() > 0.5:
+        landmarks = batch_depth_flip(landmarks)
+    landmarks = batch_rotate_points(landmarks, MAX_ROTATION_ANGLE)
     return landmarks, torch.tensor(target)
 
 
@@ -149,7 +154,7 @@ if __name__ == "__main__":
     num_classes = len(labels)
 
     # da model
-    model_ = GestureNet(hidden_size=64, output_size=num_classes).to(device)
+    model_ = GestureNet(hidden_size=72, output_size=num_classes).to(device)
     print(model_)
     train_model(model_, data, epochs=2500, batch_size=256)
     stats(model_, GestureDataset(file_path=dataset_file, _labels=labels), num_classes, labels,

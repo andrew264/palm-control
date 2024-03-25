@@ -163,6 +163,22 @@ def batch_rotate_points(points: torch.Tensor, max_angle: int) -> torch.Tensor:
     return torch.matmul(torch.matmul(torch.matmul(points, Rz), Ry), Rx)
 
 
+def batch_horizontal_flip(points: torch.Tensor) -> torch.Tensor:
+    """
+    Apply horizontal flip to points.
+    Must be in Batch x 21 x 3 format.
+    """
+    return points * torch.tensor([-1, 1, 1], dtype=points.dtype)
+
+
+def batch_depth_flip(points: torch.Tensor) -> torch.Tensor:
+    """
+    Apply depth flip to points.
+    Must be in Batch x 21 x 3 format.
+    """
+    return points * torch.tensor([1, 1, -1], dtype=points.dtype)
+
+
 def get_gesture_class_labels(file_path: str) -> list[str]:
     with open(file_path, "r") as file:
         labels = file.read().splitlines()
