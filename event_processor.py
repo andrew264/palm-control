@@ -1,7 +1,8 @@
 import contextlib
+import multiprocessing
 import os
 import time
-from multiprocessing import Process, Queue
+from multiprocessing import Queue
 from typing import Optional
 
 import cv2
@@ -21,7 +22,7 @@ pyautogui.FAILSAFE = False
 SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 
 
-class EventProcessor(Process):
+class EventProcessor(multiprocessing.Process):
     def __init__(self, gui_event_queue: Queue, tracking_image_queue: Queue):
         super(EventProcessor, self).__init__()
         self.gui_event_queue = gui_event_queue
@@ -55,6 +56,7 @@ class EventProcessor(Process):
         self.audio_thread = None
 
     def create_threads(self):
+        start = time.time()
         self.tracking_thread = HandTrackingThread(landmark_queue=self.hand_landmarks_queue,
                                                   frame_queue=self.video_frame_queue,
                                                   num_hands=NUM_HANDS,
@@ -62,12 +64,13 @@ class EventProcessor(Process):
                                                   camera_id=CAMERA_ID,
                                                   camera_width=WIDTH, camera_height=HEIGHT, camera_fps=FPS)
         self.tracking_thread.start()
-        print("Tracking thread started")
+        print(f"Hand tracking thread started in {time.time() - start:.2f} seconds")
 
+        start = time.time()
         self.audio_thread = SpeechThread(signal_queue=self.audio_thread_communication_queue,
                                          typewriter_queue=self.typewriter_queue)
         self.audio_thread.start()
-        print("Audio thread started")
+        print(f"Speech thread started in {time.time() - start:.2f} seconds")
 
     def load_gesture_detector(self):
         self.gesture_detector = GestureDetectorProMax(self.hand, model_path='./models/gesture_model.onnx',

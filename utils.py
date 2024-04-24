@@ -1,3 +1,4 @@
+import time
 from typing import Union
 
 import cv2
@@ -83,6 +84,7 @@ def draw_mp_landmarks_on_image(rgb_image, detection_result):
 
 
 def load_mediapipe_model(num_hands: int = 2, model_path: str = './models/hand_landmarker.task'):
+    start = time.time()
     import mediapipe as mp
     from mediapipe.tasks import python
     HandLandmarker = mp.tasks.vision.HandLandmarker
@@ -95,6 +97,7 @@ def load_mediapipe_model(num_hands: int = 2, model_path: str = './models/hand_la
         num_hands=num_hands,
         min_tracking_confidence=0.3)
     detector = HandLandmarker.create_from_options(options)
+    print(f"Loaded mediapipe model in {time.time() - start:.2f} seconds")
     return detector
 
 

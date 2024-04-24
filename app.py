@@ -1,3 +1,5 @@
+import os
+import time
 import tkinter as tk
 from multiprocessing import Queue
 from tkinter import ttk
@@ -8,6 +10,8 @@ from PIL import Image, ImageTk
 from constants import DEFAULT_TRACKING_SMOOTHNESS, HEIGHT, WIDTH, DEFAULT_MOUSE_SMOOTHNESS, EMPTY_FRAME
 from event_processor import EventProcessor
 from typin import HandLandmark, GUIEvents
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class GUI:
@@ -59,7 +63,6 @@ class GUI:
         self.root.destroy()
 
     def create_widgets(self):
-        self.event_processor.start()
         self.tracking_image_label = ttk.Label(self.root, style="TLabel")
         self.tracking_image_label.pack()
 
@@ -135,6 +138,9 @@ class GUI:
         self.root.after(16, self.update_frame)
 
     def run(self):
+        start = time.time()
+        self.event_processor.start()
+        print(f"Event Processor started in {time.time() - start:.2f} seconds")
         self.root.mainloop()
 
 

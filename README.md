@@ -33,5 +33,6 @@ Download [MODEL LINK](https://storage.googleapis.com/mediapipe-models/hand_landm
 
 # TODO (what I think I need to do)
 
+- [ ] Run faster ???
 - [ ] Add more gestures ???
 - [ ] profit ???
