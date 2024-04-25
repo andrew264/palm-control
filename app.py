@@ -51,9 +51,9 @@ class GUI:
         self.mouse_pointer_dropdown = None
 
         # Queues
-        self.tracking_image = SharedMemory("tracking_image", create=True, size=EMPTY_FRAME.nbytes)
+        self.tracking_image = SharedMemory(create=True, size=EMPTY_FRAME.nbytes)
         self.gui_event_queue = Queue(maxsize=10)
-        self.event_processor = EventProcessor(self.gui_event_queue, )
+        self.event_processor = EventProcessor(self.gui_event_queue, tracking_image_name=self.tracking_image.name)
 
         self.create_widgets()
         self.update_frame()
@@ -133,7 +133,7 @@ class GUI:
         img = ImageTk.PhotoImage(image=img)
         self.tracking_image_label.config(image=img)
         self.tracking_image_label.image = img
-        self.root.after(16, self.update_frame)
+        self.root.after(10, self.update_frame)
 
     def run(self):
         start = time.time()

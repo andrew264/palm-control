@@ -10,8 +10,8 @@ import cv2
 import numpy as np
 import pyautogui
 
-from constants import HEIGHT, WIDTH, EMPTY_FRAME, NUM_HANDS, DEFAULT_TRACKING_SMOOTHNESS, FPS, CAMERA_ID, \
-    DEFAULT_MOUSE_SMOOTHNESS, DEFAULT_SHOW_WEBCAM, DEFAULT_POINTER_SOURCE
+from constants import HEIGHT, WIDTH, EMPTY_FRAME, DEFAULT_TRACKING_SMOOTHNESS, DEFAULT_MOUSE_SMOOTHNESS, \
+    DEFAULT_SHOW_WEBCAM, DEFAULT_POINTER_SOURCE
 from gesture_detector import GestureDetectorProMax
 from hand import Hand
 from hand_tracking import HandTrackingThread
@@ -24,10 +24,10 @@ SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 
 
 class EventProcessor(multiprocessing.Process):
-    def __init__(self, gui_event_queue: Queue, ):
-        super(EventProcessor, self).__init__()
+    def __init__(self, gui_event_queue: Queue, tracking_image_name: str):
+        super().__init__()
         self.gui_event_queue = gui_event_queue
-        self.tracking_image = SharedMemory("tracking_image", )
+        self.tracking_image = SharedMemory(tracking_image_name)
         self.show_webcam = DEFAULT_SHOW_WEBCAM
 
         # Mouse Control
@@ -45,9 +45,8 @@ class EventProcessor(multiprocessing.Process):
         self.current_pointer_source: HandLandmark = DEFAULT_POINTER_SOURCE
 
         # Hand Tracking Thread
-        self._last_video_frame = EMPTY_FRAME.copy()
         self._last_video_frame_time = time.time()
-        self.video_frame_shared = SharedMemory(create=True, size=EMPTY_FRAME.nbytes, name="video_frame")
+        self.video_frame_shared = SharedMemory(create=True, size=EMPTY_FRAME.nbytes)
         self.hand_landmarks_queue = Queue(maxsize=3)
         self.tracking_thread = None
 
@@ -59,10 +58,7 @@ class EventProcessor(multiprocessing.Process):
     def create_threads(self):
         start = time.time()
         self.tracking_thread = HandTrackingThread(landmark_queue=self.hand_landmarks_queue,
-                                                  num_hands=NUM_HANDS,
-                                                  model_path='./models/hand_landmarker.task',
-                                                  camera_id=CAMERA_ID,
-                                                  camera_width=WIDTH, camera_height=HEIGHT, camera_fps=FPS)
+                                                  video_frame_name=self.video_frame_shared.name)
         self.tracking_thread.start()
         print(f"Hand tracking thread started in {time.time() - start:.2f} seconds")
 
@@ -86,20 +82,20 @@ class EventProcessor(multiprocessing.Process):
         self.video_frame_shared.close()
         self.video_frame_shared.unlink()
         print("Terminating event processor")
-        super(EventProcessor, self).terminate()
+        exit(0)
 
     def update_tracking_frame(self):
         if self.show_webcam:
             frame = np.ndarray((HEIGHT, WIDTH, 3), dtype=np.uint8, buffer=self.video_frame_shared.buf)
-            self._last_video_frame = frame.copy()
+            _last_video_frame = frame.copy()
         else:
-            self._last_video_frame = EMPTY_FRAME.copy()
+            _last_video_frame = EMPTY_FRAME.copy()
         new_time = time.time()
         fps = 1 / (new_time - self._last_video_frame_time)
         self._last_video_frame_time = new_time
 
         if self.hand.coordinates_2d is not None:
-            frame = draw_landmarks_on_image(self._last_video_frame, self.hand.coordinates_2d)
+            frame = draw_landmarks_on_image(_last_video_frame, self.hand.coordinates_2d)
             cv2.putText(frame, f"Event: {self.current_event.name}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         1, (255, 255, 255), 2)
             if fps is not None:
@@ -107,7 +103,7 @@ class EventProcessor(multiprocessing.Process):
                             1, (255, 255, 255), 2)
             self.tracking_image.buf[:frame.nbytes] = frame.tobytes()
         else:
-            self.tracking_image.buf[:self._last_video_frame.nbytes] = self._last_video_frame.tobytes()
+            self.tracking_image.buf[:_last_video_frame.nbytes] = _last_video_frame.tobytes()
 
     def do_mouse_movement(self, x: Optional[float], y: Optional[float]):
         if x is None or y is None:
@@ -236,11 +232,11 @@ class EventProcessor(multiprocessing.Process):
 
     def do_typing(self):
         while not self.typewriter_queue.empty():
-            pyautogui.write(self.typewriter_queue.get(), _pause=False)  # Write the text to the active window
+            pyautogui.write(self.typewriter_queue.get_nowait(), _pause=False)  # Write the text to the active window
 
     def update_hand_landmarks(self):
         while not self.hand_landmarks_queue.empty():
-            self.hand.update(self.hand_landmarks_queue.get(block=False))  # Update the hand landmarks from the queue
+            self.hand.update(self.hand_landmarks_queue.get())  # Update the hand landmarks from the queue
 
     def run(self):
         try:

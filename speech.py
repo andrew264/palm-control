@@ -40,7 +40,7 @@ class SpeechThread(mp.Process):
             if not self.signal_queue.empty() and self.signal_queue.get():  # If the signal queue is not empty
                 self.speech_to_text()
                 while not self.signal_queue.empty():  # Clear the queue
-                    self.signal_queue.get()
+                    self.signal_queue.get_nowait()
             time.sleep(0.5)
 
     def speech_to_text(self, ):
@@ -57,7 +57,7 @@ class SpeechThread(mp.Process):
                 chime.success()
                 print(f"Recognized: {text} in {time.time() - start:.2f} seconds")
                 # pyautogui.typewrite(text, interval=0.1, _pause=True) # pyautogui is not thread safe
-                self.typewriter_queue.put(text)
+                self.typewriter_queue.put_nowait(text, )
             except sr.UnknownValueError as e:
                 print(e)
                 chime.error()

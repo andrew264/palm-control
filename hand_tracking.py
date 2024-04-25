@@ -5,35 +5,23 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
+from constants import HEIGHT, WIDTH, FPS, CAMERA_ID, NUM_HANDS
 from utils import load_mediapipe_model
 
 
 class HandTrackingThread(multiprocessing.Process):
-    def __init__(self,
-                 landmark_queue: multiprocessing.Queue,
-                 num_hands: int,
-                 model_path: str,
-                 camera_id: int,
-                 camera_width: int,
-                 camera_height: int,
-                 camera_fps: int) -> None:
+    def __init__(self, landmark_queue: multiprocessing.Queue, video_frame_name: str) -> None:
         super().__init__()
         self.landmark_queue = landmark_queue
-        self.video_frame = SharedMemory("video_frame")
-        self.num_hands = num_hands
-        self.model_path = model_path
+        self.video_frame = SharedMemory(video_frame_name)
         self.detector = None
-        self.camera_id = camera_id
-        self.camera_width = camera_width
-        self.camera_height = camera_height
-        self.camera_fps = camera_fps
 
     def run(self):
-        self.detector = load_mediapipe_model(num_hands=self.num_hands, model_path=self.model_path)
-        cap = cv2.VideoCapture(self.camera_id)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
-        cap.set(cv2.CAP_PROP_FPS, self.camera_fps)
+        self.detector = load_mediapipe_model(num_hands=NUM_HANDS, model_path='./models/hand_landmarker.task')
+        cap = cv2.VideoCapture(CAMERA_ID)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
+        cap.set(cv2.CAP_PROP_FPS, FPS)
         counter = 0
         while cap.isOpened():
             ret, frame = cap.read()
