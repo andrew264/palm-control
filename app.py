@@ -2,6 +2,7 @@ import os
 import time
 import tkinter as tk
 from multiprocessing import Queue
+from multiprocessing.shared_memory import SharedMemory
 from tkinter import ttk
 
 import sv_ttk
@@ -50,9 +51,9 @@ class GUI:
         self.mouse_pointer_dropdown = None
 
         # Queues
-        self.tracking_image_queue = Queue(maxsize=6)
+        self.tracking_image = SharedMemory("tracking_image", create=True, size=EMPTY_FRAME.nbytes)
         self.gui_event_queue = Queue(maxsize=10)
-        self.event_processor = EventProcessor(self.gui_event_queue, self.tracking_image_queue)
+        self.event_processor = EventProcessor(self.gui_event_queue, )
 
         self.create_widgets()
         self.update_frame()
@@ -60,7 +61,10 @@ class GUI:
     def on_close(self):
         print("Closing the application")
         self.gui_event_queue.put(GUIEvents.EXIT)
+        self.tracking_image.unlink()
+        self.tracking_image.close()
         self.root.destroy()
+        exit(0)
 
     def create_widgets(self):
         self.tracking_image_label = ttk.Label(self.root, style="TLabel")
@@ -124,14 +128,8 @@ class GUI:
         boolean_value = True if self.show_webcam_var.get() == 1 else False
         self.gui_event_queue.put((GUIEvents.SHOW_WEBCAM, boolean_value))
 
-    def get_tracking_frame(self):
-        if not self.tracking_image_queue.empty():
-            return self.tracking_image_queue.get()
-        return EMPTY_FRAME.copy()
-
     def update_frame(self):
-        frame = self.get_tracking_frame()
-        img = Image.fromarray(frame)
+        img = Image.frombytes("RGB", (WIDTH, HEIGHT), self.tracking_image.buf)
         img = ImageTk.PhotoImage(image=img)
         self.tracking_image_label.config(image=img)
         self.tracking_image_label.image = img

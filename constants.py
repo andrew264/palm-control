@@ -3,7 +3,7 @@ import numpy as np
 from typin import HandLandmark
 
 # Camera
-WIDTH, HEIGHT = 1280, 720
+WIDTH, HEIGHT = 1920, 1080
 FPS = 60
 CAMERA_ID = 0
 EMPTY_FRAME = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)

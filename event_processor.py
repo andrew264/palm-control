@@ -3,6 +3,7 @@ import multiprocessing
 import os
 import time
 from multiprocessing import Queue
+from multiprocessing.shared_memory import SharedMemory
 from typing import Optional
 
 import cv2
@@ -23,10 +24,10 @@ SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 
 
 class EventProcessor(multiprocessing.Process):
-    def __init__(self, gui_event_queue: Queue, tracking_image_queue: Queue):
+    def __init__(self, gui_event_queue: Queue, ):
         super(EventProcessor, self).__init__()
         self.gui_event_queue = gui_event_queue
-        self.tracking_image_queue = tracking_image_queue
+        self.tracking_image = SharedMemory("tracking_image", )
         self.show_webcam = DEFAULT_SHOW_WEBCAM
 
         # Mouse Control
@@ -46,7 +47,7 @@ class EventProcessor(multiprocessing.Process):
         # Hand Tracking Thread
         self._last_video_frame = EMPTY_FRAME.copy()
         self._last_video_frame_time = time.time()
-        self.video_frame_queue = Queue(maxsize=3)
+        self.video_frame_shared = SharedMemory(create=True, size=EMPTY_FRAME.nbytes, name="video_frame")
         self.hand_landmarks_queue = Queue(maxsize=3)
         self.tracking_thread = None
 
@@ -58,7 +59,6 @@ class EventProcessor(multiprocessing.Process):
     def create_threads(self):
         start = time.time()
         self.tracking_thread = HandTrackingThread(landmark_queue=self.hand_landmarks_queue,
-                                                  frame_queue=self.video_frame_queue,
                                                   num_hands=NUM_HANDS,
                                                   model_path='./models/hand_landmarker.task',
                                                   camera_id=CAMERA_ID,
@@ -78,23 +78,26 @@ class EventProcessor(multiprocessing.Process):
 
     def terminate(self):
         if self.tracking_thread is not None:
+            print("Terminating tracking thread")
             self.tracking_thread.terminate()
         if self.audio_thread is not None:
+            print("Terminating audio thread")
             self.audio_thread.terminate()
+        self.video_frame_shared.close()
+        self.video_frame_shared.unlink()
+        print("Terminating event processor")
         super(EventProcessor, self).terminate()
 
-    def get_tracking_frame(self) -> np.ndarray:
+    def update_tracking_frame(self):
         if self.show_webcam:
-            if not self.video_frame_queue.empty():
-                self._last_video_frame = self.video_frame_queue.get_nowait()
-            new_time = time.time()
-            fps = 1 / (new_time - self._last_video_frame_time)
-            self._last_video_frame_time = new_time
+            frame = np.ndarray((HEIGHT, WIDTH, 3), dtype=np.uint8, buffer=self.video_frame_shared.buf)
+            self._last_video_frame = frame.copy()
         else:
             self._last_video_frame = EMPTY_FRAME.copy()
-            while not self.video_frame_queue.empty():
-                self.video_frame_queue.get_nowait()
-            fps = None
+        new_time = time.time()
+        fps = 1 / (new_time - self._last_video_frame_time)
+        self._last_video_frame_time = new_time
+
         if self.hand.coordinates_2d is not None:
             frame = draw_landmarks_on_image(self._last_video_frame, self.hand.coordinates_2d)
             cv2.putText(frame, f"Event: {self.current_event.name}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX,
@@ -102,9 +105,9 @@ class EventProcessor(multiprocessing.Process):
             if fps is not None:
                 cv2.putText(frame, f"FPS: {fps:.2f}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX,
                             1, (255, 255, 255), 2)
-            return frame
+            self.tracking_image.buf[:frame.nbytes] = frame.tobytes()
         else:
-            return self._last_video_frame
+            self.tracking_image.buf[:self._last_video_frame.nbytes] = self._last_video_frame.tobytes()
 
     def do_mouse_movement(self, x: Optional[float], y: Optional[float]):
         if x is None or y is None:
@@ -230,10 +233,6 @@ class EventProcessor(multiprocessing.Process):
                     self.current_pointer_source = value
                 case _:
                     pass
-
-    def update_tracking_frame(self):
-        if not self.tracking_image_queue.full():
-            self.tracking_image_queue.put_nowait(self.get_tracking_frame())
 
     def do_typing(self):
         while not self.typewriter_queue.empty():

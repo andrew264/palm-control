@@ -1,5 +1,4 @@
 import multiprocessing as mp
-import os
 import time
 
 import chime
@@ -68,4 +67,6 @@ class SpeechThread(mp.Process):
             except RuntimeError as e:
                 print("pyautogui killed itself ig\n", e)
                 chime.error()
+            except KeyboardInterrupt:
+                pass
         print("Done listening")
