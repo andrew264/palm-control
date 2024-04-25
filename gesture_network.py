@@ -19,7 +19,7 @@ class GestureNet(nn.Module):
         self.coord_conv3 = nn.Conv1d(in_channels=hidden_size // 4, out_channels=hidden_size // 2,
                                      kernel_size=n_dim, stride=1, padding=1)
         self.pooling = nn.MaxPool1d(kernel_size=2)
-        self.coord_norm = nn.LayerNorm(hidden_size)
+        self.coord_norm = nn.BatchNorm1d(hidden_size)
 
         self.rad_proj = nn.Linear(len(HAND_LANDMARK_ANGLES), hidden_size)
         self.rad_norm = nn.LayerNorm(hidden_size)
@@ -29,7 +29,7 @@ class GestureNet(nn.Module):
         self.dropout = nn.Dropout(p=0.2)
         self.down_proj = nn.Linear(3 * hidden_size, output_size)
 
-        self.act = F.relu
+        self.act = F.leaky_relu
 
     @staticmethod
     @torch.no_grad()

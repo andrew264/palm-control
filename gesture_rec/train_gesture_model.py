@@ -60,7 +60,7 @@ def plot(accuracy_hist: list[float], loss_hist: list[float]):
     ig, ax1 = plt.subplots(figsize=(10, 5))
 
     ax1.plot(range(1, len(accuracy_hist) + 1), accuracy_hist, marker='o', color='b', label='Accuracy')
-    ax1.set_xlabel('Epochs')
+    ax1.set_xlabel('Steps')
     ax1.set_ylabel('Accuracy', color='b')
     ax1.tick_params(axis='y', labelcolor='b')
     ax1.legend(loc='upper left')
@@ -86,7 +86,7 @@ def train_model(model: torch.nn.Module, dataset: Dataset, epochs=10, batch_size=
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4)
     total_steps = epochs * len(dataloader)
-    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.1, total_iters=total_steps)
+    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1, end_factor=0.5, total_iters=total_steps)
 
     accuracy_hist = []
     loss_hist = []
@@ -123,7 +123,6 @@ def train_model(model: torch.nn.Module, dataset: Dataset, epochs=10, batch_size=
 
 def stats(model: torch.nn.Module, dataset: Dataset, num_classes: int, labels: list[str], csv_filename: str):
     model.eval()
-    correct = [0] * num_classes
     total = [0] * num_classes
     wrong = [0] * num_classes
     wrong_predictions = []
@@ -167,9 +166,9 @@ if __name__ == "__main__":
     num_classes = len(labels)
 
     # da model
-    model_ = GestureNet(hidden_size=72, output_size=num_classes).to(device)
+    model_ = GestureNet(hidden_size=64, output_size=num_classes).to(device)
     print(model_)
-    train_model(model_, data, epochs=2500, batch_size=256)
+    train_model(model_, data, epochs=1000, batch_size=256)
     stats(model_, GestureDataset(file_path=dataset_file, _labels=labels), num_classes, labels,
           csv_filename="./gesture_rec/stats.csv")
 
