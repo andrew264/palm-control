@@ -10,7 +10,7 @@ from gesture_network import GestureNet
 from utils import (get_gesture_class_labels, batch_normalize_landmarks, batch_rotate_points, batch_horizontal_flip,
                    batch_depth_flip)
 
-MAX_ROTATION_ANGLE = 30
+MAX_ROTATION_ANGLE = 40
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 

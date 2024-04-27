@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import os
 import time
 
 import chime
@@ -20,6 +21,7 @@ class SpeechThread(mp.Process):
         self.typewriter_queue = typewriter_queue
 
     def run(self):
+        print(f"{self.__class__.__name__}'s PID: {os.getpid()}")
         if not self.whisper_model:
             if torch.cuda.is_available():
                 device = torch.device("cuda")
@@ -56,7 +58,6 @@ class SpeechThread(mp.Process):
                 text: str = self.recognizer.recognize_whisper(audio, model=self.model_name).strip()
                 chime.success()
                 print(f"Recognized: {text} in {time.time() - start:.2f} seconds")
-                # pyautogui.typewrite(text, interval=0.1, _pause=True) # pyautogui is not thread safe
                 self.typewriter_queue.put_nowait(text, )
             except sr.UnknownValueError as e:
                 print(e)

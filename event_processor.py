@@ -24,6 +24,8 @@ SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 
 
 class EventProcessor(multiprocessing.Process):
+    _iteration_delay = 1 / 60
+
     def __init__(self, gui_event_queue: Queue, tracking_image_name: str):
         super().__init__()
         self.gui_event_queue = gui_event_queue
@@ -239,11 +241,13 @@ class EventProcessor(multiprocessing.Process):
             self.hand.update(self.hand_landmarks_queue.get())  # Update the hand landmarks from the queue
 
     def run(self):
+        print(f"{self.__class__.__name__}'s PID: {os.getpid()}")
         try:
             self.create_threads()
             self.load_gesture_detector()
         except AssertionError as e:
             print(e)
+        start_time = time.time()
         while True:
             self.handle_events()
             self.update_tracking_frame()
@@ -291,3 +295,8 @@ class EventProcessor(multiprocessing.Process):
                 self.current_event = HandEvent.MOUSE_NO_EVENT
                 self.disable_mouse_drag()
                 self.prev_x, self.prev_y = None, None
+
+            elapsed_time = time.time() - start_time
+            remaining_time = max(self._iteration_delay - elapsed_time, 0)
+            time.sleep(remaining_time)
+            start_time = time.time()

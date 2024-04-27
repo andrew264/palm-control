@@ -1,4 +1,5 @@
 import multiprocessing
+import os
 from multiprocessing.shared_memory import SharedMemory
 
 import cv2
@@ -17,6 +18,7 @@ class HandTrackingThread(multiprocessing.Process):
         self.detector = None
 
     def run(self):
+        print(f"{self.__class__.__name__}'s PID: {os.getpid()}")
         self.detector = load_mediapipe_model(num_hands=NUM_HANDS, model_path='./models/hand_landmarker.task')
         cap = cv2.VideoCapture(CAMERA_ID)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
@@ -30,7 +32,7 @@ class HandTrackingThread(multiprocessing.Process):
             image = cv2.flip(frame, 1)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             self.video_frame.buf[:image.nbytes] = image.tobytes()
-            image = cv2.resize(image, (720, 480), interpolation=cv2.INTER_NEAREST)  # Resize for faster processing ig
+            # image = cv2.resize(image, (720, 480), interpolation=cv2.INTER_NEAREST)  # Resize for faster processing ig
             results = self.detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=image), counter)
             counter += 1
             landmarks = None
