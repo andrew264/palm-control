@@ -10,7 +10,7 @@ EMPTY_FRAME = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
 
 # Hand tracking
 NUM_HANDS = 1
-DEFAULT_TRACKING_SMOOTHNESS: float = 5e-1
+DEFAULT_TRACKING_SMOOTHNESS: float = 4e-1
 DEFAULT_MOUSE_SMOOTHNESS: float = 0.75
 
 # GUI Settings

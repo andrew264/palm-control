@@ -4,7 +4,7 @@ import os
 import time
 from multiprocessing import Queue
 from multiprocessing.shared_memory import SharedMemory
-from typing import Optional
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -37,7 +37,7 @@ class EventProcessor(multiprocessing.Process):
         self.last_click_time = time.time()
         self.screen_width, self.screen_height = None, None
         self.mouse_smoothness_alpha = DEFAULT_MOUSE_SMOOTHNESS
-        self.prev_x, self.prev_y = None, None
+        self.prev_coords = None
 
         self.current_event = HandEvent.MOUSE_NO_EVENT
 
@@ -86,6 +86,20 @@ class EventProcessor(multiprocessing.Process):
         print("Terminating event processor")
         exit(0)
 
+    @property
+    def pointer_coordinates(self) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        # coordinates of previous and current frame
+        if self.hand.coordinates is None:
+            self.prev_coords = None
+            return None
+        if self.prev_coords is None:
+            self.prev_coords = self.hand.coordinates_of(self.current_pointer_source)
+            return None
+        curr_coords = self.hand.coordinates_of(self.current_pointer_source)
+        out = (self.prev_coords, curr_coords)
+        self.prev_coords = curr_coords
+        return out
+
     def update_tracking_frame(self):
         if self.show_webcam:
             frame = np.ndarray((HEIGHT, WIDTH, 3), dtype=np.uint8, buffer=self.video_frame_shared.buf)
@@ -107,54 +121,46 @@ class EventProcessor(multiprocessing.Process):
         else:
             self.tracking_image.buf[:_last_video_frame.nbytes] = _last_video_frame.tobytes()
 
-    def do_mouse_movement(self, x: Optional[float], y: Optional[float]):
-        if x is None or y is None:
-            # Reset previous coordinates if x or y is None
-            self.prev_x, self.prev_y = None, None
+    def do_mouse_movement(self, ):
+        coords = self.pointer_coordinates
+        if coords is None:
             return
-
-        if self.prev_x is None or self.prev_y is None:
-            # Initialize previous coordinates if not already set
-            self.prev_x, self.prev_y = x, y
-            return
+        prev_coords, current_coords = coords
+        prev_x, prev_y, prev_z = prev_coords
+        current_x, current_y, current_z = current_coords
+        depth_mul = np.interp(-current_z, (0.01, 0.2), (60, 70))
 
         # Smooth the mouse movement
         alpha = self.mouse_smoothness_alpha
-        x_smoothed = self.prev_x * (1 - alpha) + x * alpha
-        y_smoothed = self.prev_y * (1 - alpha) + y * alpha
+        x_smoothed = prev_x * (1 - alpha) + current_x * alpha
+        y_smoothed = prev_y * (1 - alpha) + current_y * alpha
 
-        distance = ((x_smoothed - self.prev_x) ** 2 + (y_smoothed - self.prev_y) ** 2) ** .5
+        distance = ((x_smoothed - prev_x) ** 2 + (y_smoothed - prev_y) ** 2) ** .5
         if distance < 1e-3:
             return
-        multiplier = max(distance * 25, 1.)
+        multiplier = max(distance * depth_mul, 1.)
 
-        dx = (x_smoothed - self.prev_x) * multiplier
-        dy = (y_smoothed - self.prev_y) * multiplier
+        dx = (x_smoothed - prev_x) * multiplier
+        dy = (y_smoothed - prev_y) * multiplier
 
         # Calculate new coordinates
         current_x, current_y = pyautogui.position()
         new_x = current_x + dx * SCREEN_WIDTH
         new_y = current_y + dy * SCREEN_HEIGHT
 
-        # Update previous coordinates
-        self.prev_x, self.prev_y = x, y
-
         pyautogui.moveTo(int(new_x), int(new_y), _pause=False)
 
-    def pinch_scroll(self, x: Optional[float], y: Optional[float]):
-        if x is None or y is None:
-            # Reset previous coordinates if x or y is None
-            self.prev_x, self.prev_y = None, None
+    def pinch_scroll(self):
+        coords = self.pointer_coordinates
+        if coords is None:
             return
-
-        if self.prev_x is None or self.prev_y is None:
-            # Initialize previous coordinates if not already set
-            self.prev_x, self.prev_y = x, y
-            return
+        prev_coords, current_coords = coords
+        prev_x, prev_y, prev_z = prev_coords
+        current_x, current_y, current_z = current_coords
 
         # Calculate the change in coordinates
-        y_delta = y - self.prev_y
-        x_delta = x - self.prev_x
+        y_delta = current_y - prev_y
+        x_delta = current_x - prev_x
 
         # Check if movement is significant
         if abs(y_delta) < 1e-3 and abs(x_delta) < 1e-3:
@@ -164,14 +170,12 @@ class EventProcessor(multiprocessing.Process):
         if os.name == "nt":
             y_scale = 1e4 if abs(y_delta) > abs(x_delta) else 5e4
         else:
-            y_scale = 3e1 if abs(y_delta) > abs(x_delta) else 5e2
+            y_scale = 1e2 if abs(y_delta) > abs(x_delta) else 2e2
 
         # Apply shift key modifier if scrolling horizontally
         with pyautogui.hold("shift") if abs(y_delta) <= abs(x_delta) else contextlib.suppress():
             # Perform the scroll action
             pyautogui.scroll(int(y_delta * y_scale), _pause=False)
-
-        self.prev_x, self.prev_y = x, y
 
     def allow_click(self):
         if time.time() - self.last_click_time > 0.5:
@@ -255,12 +259,6 @@ class EventProcessor(multiprocessing.Process):
             self.update_hand_landmarks()
 
             if not self.hand.is_missing:
-                hand_coords = self.hand.coordinates_of(self.current_pointer_source)
-                if hand_coords is not None:
-                    x, y, _ = hand_coords.tolist()
-                else:
-                    x, y = None, None
-
                 # Detect the current event
                 self.current_event = self.gesture_detector.detect()
 
@@ -269,7 +267,7 @@ class EventProcessor(multiprocessing.Process):
                 match self.current_event:
                     case HandEvent.MOUSE_DRAG:
                         self.enable_mouse_drag()
-                        self.do_mouse_movement(x, y)
+                        self.do_mouse_movement()
                     case HandEvent.MOUSE_CLICK:
                         self.do_lmb_click()
                     case HandEvent.MOUSE_RIGHT_CLICK:
@@ -278,9 +276,9 @@ class EventProcessor(multiprocessing.Process):
                         if self.audio_thread_communication_queue.empty():
                             self.audio_thread_communication_queue.put_nowait(True)
                     case HandEvent.MOUSE_MOVE:
-                        self.do_mouse_movement(x, y)
+                        self.do_mouse_movement()
                     case HandEvent.MOUSE_SCROLL:
-                        self.pinch_scroll(x, y)
+                        self.pinch_scroll()
                     case HandEvent.VOLUME_UP:
                         pyautogui.press("volumeup", _pause=False)
                     case HandEvent.VOLUME_DOWN:
@@ -290,11 +288,10 @@ class EventProcessor(multiprocessing.Process):
                     case HandEvent.PASTE_TEXT:
                         self.do_paste_text()
                     case _:
-                        self.prev_x, self.prev_y = None, None
+                        self.prev_coords = None
             else:
                 self.current_event = HandEvent.MOUSE_NO_EVENT
                 self.disable_mouse_drag()
-                self.prev_x, self.prev_y = None, None
 
             elapsed_time = time.time() - start_time
             remaining_time = max(self._iteration_delay - elapsed_time, 0)
