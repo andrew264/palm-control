@@ -1,3 +1,4 @@
+import subprocess
 import time
 from typing import Union
 
@@ -187,3 +188,24 @@ def get_gesture_class_labels(file_path: str) -> list[str]:
         labels = file.read().splitlines()
         labels = [label.strip() for label in labels]
         return sorted(labels)
+
+
+def get_volume_linux() -> int:
+    # return the volume of the default audio device on Linux
+    # command: wpctl get-volume @DEFAULT_AUDIO_SINK@
+    cmd = "wpctl get-volume @DEFAULT_AUDIO_SINK@"
+    process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
+    output, error = process.communicate()
+    if error:
+        return -1
+    return int(float(output.strip().decode().split(": ")[-1]) * 100)
+
+
+def adjust_volume_linux(diff: int) -> None:
+    # adjust the volume of the default audio device on Linux
+    # command: wpctl set-volume @DEFAULT_AUDIO_SINK@ 10%+
+    cmd = f"wpctl set-volume @DEFAULT_AUDIO_SINK@ {abs(diff)}%{'+' if diff > 0 else '-'}"
+    process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
+    output, error = process.communicate()
+    if error:
+        print(f"Error: {error}")

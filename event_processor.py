@@ -17,7 +17,7 @@ from hand import Hand
 from hand_tracking import HandTrackingThread
 from speech import SpeechThread
 from typin import HandLandmark, HandEvent, GUIEvents
-from utils import draw_landmarks_on_image
+from utils import draw_landmarks_on_image, get_volume_linux, adjust_volume_linux
 
 pyautogui.FAILSAFE = False
 SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
@@ -57,7 +57,7 @@ class EventProcessor(multiprocessing.Process):
         self.typewriter_queue = Queue(maxsize=1)
         self.audio_thread = None
 
-    def create_threads(self):
+    def initialize_threads(self):
         start = time.time()
         self.tracking_thread = HandTrackingThread(landmark_queue=self.hand_landmarks_queue,
                                                   video_frame_name=self.video_frame_shared.name)
@@ -70,8 +70,8 @@ class EventProcessor(multiprocessing.Process):
         self.audio_thread.start()
         print(f"Speech thread started in {time.time() - start:.2f} seconds")
 
-    def load_gesture_detector(self):
-        self.gesture_detector = GestureDetectorProMax(self.hand, model_path='./models/gesture_model.onnx',
+        self.gesture_detector = GestureDetectorProMax(self.hand,
+                                                      model_path='./models/gesture_model.onnx',
                                                       labels_path='./gesture_rec/choices.txt')
 
     def terminate(self):
@@ -173,9 +173,9 @@ class EventProcessor(multiprocessing.Process):
             y_scale = 1e2 if abs(y_delta) > abs(x_delta) else 2e2
 
         # Apply shift key modifier if scrolling horizontally
-        with pyautogui.hold("shift") if abs(y_delta) <= abs(x_delta) else contextlib.suppress():
+        with pyautogui.hold("shift", _pause=False) if abs(y_delta) <= abs(x_delta) else contextlib.suppress():
             # Perform the scroll action
-            pyautogui.scroll(int(y_delta * y_scale), _pause=False)
+            pyautogui.scroll(y_delta * y_scale, _pause=False)
 
     def allow_click(self):
         if time.time() - self.last_click_time > 0.5:
@@ -209,7 +209,23 @@ class EventProcessor(multiprocessing.Process):
         if self.allow_click():
             pyautogui.hotkey("ctrl", "v")
 
-    def handle_events(self):
+    def increase_volume(self):
+        if self.allow_click():
+            if os.name == "nt":
+                pyautogui.press("volumeup", _pause=False)
+            else:
+                if get_volume_linux() < 100:
+                    adjust_volume_linux(5)
+
+    def decrease_volume(self):
+        if self.allow_click():
+            if os.name == "nt":
+                pyautogui.press("volumedown", _pause=False)
+            else:
+                if get_volume_linux() > 0:
+                    adjust_volume_linux(-5)
+
+    def handle_gui_events(self):
         while not self.gui_event_queue.empty():
             item = self.gui_event_queue.get()
             if isinstance(item, tuple):
@@ -247,16 +263,16 @@ class EventProcessor(multiprocessing.Process):
     def run(self):
         print(f"{self.__class__.__name__}'s PID: {os.getpid()}")
         try:
-            self.create_threads()
-            self.load_gesture_detector()
+            self.initialize_threads()
         except AssertionError as e:
             print(e)
+            self.terminate()
         start_time = time.time()
         while True:
-            self.handle_events()
+            self.handle_gui_events()
+            self.update_hand_landmarks()
             self.update_tracking_frame()
             self.do_typing()
-            self.update_hand_landmarks()
 
             if not self.hand.is_missing:
                 # Detect the current event
@@ -280,9 +296,9 @@ class EventProcessor(multiprocessing.Process):
                     case HandEvent.MOUSE_SCROLL:
                         self.pinch_scroll()
                     case HandEvent.VOLUME_UP:
-                        pyautogui.press("volumeup", _pause=False)
+                        self.increase_volume()
                     case HandEvent.VOLUME_DOWN:
-                        pyautogui.press("volumedown", _pause=False)
+                        self.decrease_volume()
                     case HandEvent.COPY_TEXT:
                         self.do_copy_text()
                     case HandEvent.PASTE_TEXT:
