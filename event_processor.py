@@ -92,10 +92,12 @@ class EventProcessor(multiprocessing.Process):
         if self.hand.coordinates is None:
             self.prev_coords = None
             return None
-        if self.prev_coords is None:
-            self.prev_coords = self.hand.coordinates_of(self.current_pointer_source)
-            return None
         curr_coords = self.hand.coordinates_of(self.current_pointer_source)
+        if self.prev_coords is None:
+            self.prev_coords = curr_coords
+            return None
+        if np.array_equal(curr_coords, self.prev_coords):
+            return None
         out = (self.prev_coords, curr_coords)
         self.prev_coords = curr_coords
         return out
@@ -158,24 +160,24 @@ class EventProcessor(multiprocessing.Process):
         prev_x, prev_y, prev_z = prev_coords
         current_x, current_y, current_z = current_coords
 
-        # Calculate the change in coordinates
-        y_delta = current_y - prev_y
-        x_delta = current_x - prev_x
+        # Smooth the mouse movement
+        alpha = self.mouse_smoothness_alpha
+        x_smoothed = prev_x * (1 - alpha) + current_x * alpha
+        y_smoothed = prev_y * (1 - alpha) + current_y * alpha
 
-        # Check if movement is significant
-        if abs(y_delta) < 1e-3 and abs(x_delta) < 1e-3:
+        distance = ((x_smoothed - prev_x) ** 2 + (y_smoothed - prev_y) ** 2) ** .5
+        if distance < 1e-3:
             return
 
-        # Determine the scaling factor based on the operating system
-        if os.name == "nt":
-            y_scale = 1e4 if abs(y_delta) > abs(x_delta) else 5e4
-        else:
-            y_scale = 1e2 if abs(y_delta) > abs(x_delta) else 2e2
+        dx: float = (x_smoothed - prev_x) * 100
+        dy: float = (y_smoothed - prev_y) * 100
+        dy = np.interp(dy, (-5, 5), (-2.5, 2.5)).item()  # vertical scroll is funky without this
 
-        # Apply shift key modifier if scrolling horizontally
-        with pyautogui.hold("shift", _pause=False) if abs(y_delta) <= abs(x_delta) else contextlib.suppress():
-            # Perform the scroll action
-            pyautogui.scroll(y_delta * y_scale, _pause=False)
+        if abs(dx) > abs(dy):  # horizontal scroll
+            with pyautogui.hold("shift", _pause=False):
+                pyautogui.scroll(dx, _pause=False)
+        else:  # vertical scroll
+            pyautogui.scroll(dy, _pause=False)
 
     def allow_click(self):
         if time.time() - self.last_click_time > 0.5:
@@ -286,6 +288,7 @@ class EventProcessor(multiprocessing.Process):
                         self.do_mouse_movement()
                     case HandEvent.MOUSE_CLICK:
                         self.do_lmb_click()
+                        self.do_mouse_movement()
                     case HandEvent.MOUSE_RIGHT_CLICK:
                         self.do_rmb_click()
                     case HandEvent.AUDIO_INPUT:

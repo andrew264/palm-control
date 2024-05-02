@@ -20,6 +20,13 @@ Download [MODEL LINK](https://storage.googleapis.com/mediapipe-models/hand_landm
 - run the script using `python app.py`
 - to exit the script press `esc` key
 
+# Notes
+In linux you can use `scrcpy` to use your mobile as a webcam
+```shell
+scrcpy --video-source=camera --no-audio  --camera-size=1920x1080 --camera-id=0 --camera-fps=60 --v4l2-sink=/dev/video0 --no-video-playback
+```
+This will stream the video from the mobile **at 60 fps** to the `/dev/video0` which can be used as a webcam
+
 # Things done
 
 - [x] Hand detection
