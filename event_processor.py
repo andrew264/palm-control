@@ -1,4 +1,4 @@
-import contextlib
+import multiprocessing
 import multiprocessing
 import os
 import time
@@ -171,13 +171,21 @@ class EventProcessor(multiprocessing.Process):
 
         dx: float = (x_smoothed - prev_x) * 100
         dy: float = (y_smoothed - prev_y) * 100
-        dy = np.interp(dy, (-5, 5), (-2.5, 2.5)).item()  # vertical scroll is funky without this
 
-        if abs(dx) > abs(dy):  # horizontal scroll
-            with pyautogui.hold("shift", _pause=False):
-                pyautogui.scroll(dx, _pause=False)
-        else:  # vertical scroll
-            pyautogui.scroll(dy, _pause=False)
+        if os.name == "nt":
+            if abs(dx) > abs(dy):
+                dx = np.interp(dx, (-5, 5), (-1000, 1000)).item()
+                with pyautogui.hold('shift', _pause=False):
+                    pyautogui.scroll(int(dx), _pause=False)
+            else:
+                dy = np.interp(dy, (-5, 5), (-1000, 1000)).item()
+                pyautogui.scroll(int(dy), _pause=False)
+        else:
+            if abs(dx) > abs(dy):  # horizontal scroll
+                pyautogui.hscroll(-dx, _pause=False)
+            else:  # vertical scroll
+                dy = np.interp(dy, (-5, 5), (-2.5, 2.5)).item()  # vertical scroll is funky without this
+                pyautogui.vscroll(dy, _pause=False)
 
     def allow_click(self):
         if time.time() - self.last_click_time > 0.5:
