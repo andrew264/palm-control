@@ -25,19 +25,24 @@ class HandTrackingThread(multiprocessing.Process):
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
         cap.set(cv2.CAP_PROP_FPS, FPS)
         counter = 0
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            image = cv2.flip(frame, 1)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            self.video_frame.buf[:image.nbytes] = image.tobytes()
-            # image = cv2.resize(image, (720, 480), interpolation=cv2.INTER_NEAREST)  # Resize for faster processing ig
-            results = self.detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=image), counter)
-            counter += 1
-            landmarks = None
-            if hand_landmarks := results.hand_landmarks:
-                landmarks = np.array([[landmark.x, landmark.y, landmark.z] for landmark in hand_landmarks[0]])
-            if not self.landmark_queue.full():
-                self.landmark_queue.put_nowait(landmarks)
-        cap.release()
+        try:
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                image = cv2.flip(frame, 1)
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                self.video_frame.buf[:image.nbytes] = image.tobytes()
+                results = self.detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=image),
+                                                         counter)
+                counter += 1
+                landmarks = None
+                if hand_landmarks := results.hand_landmarks:
+                    landmarks = np.array([[landmark.x, landmark.y, landmark.z]
+                                          for landmark in hand_landmarks[0]])
+                if not self.landmark_queue.full():
+                    self.landmark_queue.put_nowait(landmarks)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            cap.release()

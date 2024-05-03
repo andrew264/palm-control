@@ -1,5 +1,4 @@
 import multiprocessing
-import multiprocessing
 import os
 import time
 from multiprocessing import Queue
@@ -278,49 +277,52 @@ class EventProcessor(multiprocessing.Process):
             print(e)
             self.terminate()
         start_time = time.time()
-        while True:
-            self.handle_gui_events()
-            self.update_hand_landmarks()
-            self.update_tracking_frame()
-            self.do_typing()
+        try:
+            while True:
+                self.handle_gui_events()
+                self.update_hand_landmarks()
+                self.update_tracking_frame()
+                self.do_typing()
 
-            if not self.hand.is_missing:
-                # Detect the current event
-                self.current_event = self.gesture_detector.detect()
+                if not self.hand.is_missing:
+                    # Detect the current event
+                    self.current_event = self.gesture_detector.detect()
 
-                if self.current_event != HandEvent.MOUSE_DRAG and self.is_mouse_button_down:
+                    if self.current_event != HandEvent.MOUSE_DRAG and self.is_mouse_button_down:
+                        self.disable_mouse_drag()
+                    match self.current_event:
+                        case HandEvent.MOUSE_DRAG:
+                            self.enable_mouse_drag()
+                            self.do_mouse_movement()
+                        case HandEvent.MOUSE_CLICK:
+                            self.do_lmb_click()
+                            self.do_mouse_movement()
+                        case HandEvent.MOUSE_RIGHT_CLICK:
+                            self.do_rmb_click()
+                        case HandEvent.AUDIO_INPUT:
+                            if self.audio_thread_communication_queue.empty():
+                                self.audio_thread_communication_queue.put_nowait(True)
+                        case HandEvent.MOUSE_MOVE:
+                            self.do_mouse_movement()
+                        case HandEvent.MOUSE_SCROLL:
+                            self.pinch_scroll()
+                        case HandEvent.VOLUME_UP:
+                            self.increase_volume()
+                        case HandEvent.VOLUME_DOWN:
+                            self.decrease_volume()
+                        case HandEvent.COPY_TEXT:
+                            self.do_copy_text()
+                        case HandEvent.PASTE_TEXT:
+                            self.do_paste_text()
+                        case _:
+                            self.prev_coords = None
+                else:
+                    self.current_event = HandEvent.MOUSE_NO_EVENT
                     self.disable_mouse_drag()
-                match self.current_event:
-                    case HandEvent.MOUSE_DRAG:
-                        self.enable_mouse_drag()
-                        self.do_mouse_movement()
-                    case HandEvent.MOUSE_CLICK:
-                        self.do_lmb_click()
-                        self.do_mouse_movement()
-                    case HandEvent.MOUSE_RIGHT_CLICK:
-                        self.do_rmb_click()
-                    case HandEvent.AUDIO_INPUT:
-                        if self.audio_thread_communication_queue.empty():
-                            self.audio_thread_communication_queue.put_nowait(True)
-                    case HandEvent.MOUSE_MOVE:
-                        self.do_mouse_movement()
-                    case HandEvent.MOUSE_SCROLL:
-                        self.pinch_scroll()
-                    case HandEvent.VOLUME_UP:
-                        self.increase_volume()
-                    case HandEvent.VOLUME_DOWN:
-                        self.decrease_volume()
-                    case HandEvent.COPY_TEXT:
-                        self.do_copy_text()
-                    case HandEvent.PASTE_TEXT:
-                        self.do_paste_text()
-                    case _:
-                        self.prev_coords = None
-            else:
-                self.current_event = HandEvent.MOUSE_NO_EVENT
-                self.disable_mouse_drag()
 
-            elapsed_time = time.time() - start_time
-            remaining_time = max(self._iteration_delay - elapsed_time, 0)
-            time.sleep(remaining_time)
-            start_time = time.time()
+                elapsed_time = time.time() - start_time
+                remaining_time = max(self._iteration_delay - elapsed_time, 0)
+                time.sleep(remaining_time)
+                start_time = time.time()
+        except KeyboardInterrupt:
+            self.terminate()

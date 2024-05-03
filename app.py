@@ -129,17 +129,23 @@ class GUI:
         self.gui_event_queue.put((GUIEvents.SHOW_WEBCAM, boolean_value))
 
     def update_frame(self):
-        img = Image.frombytes("RGB", (WIDTH, HEIGHT), self.tracking_image.buf)
-        img = ImageTk.PhotoImage(image=img)
-        self.tracking_image_label.config(image=img)
-        self.tracking_image_label.image = img
-        self.root.after(10, self.update_frame)
+        try:
+            img = Image.frombytes("RGB", (WIDTH, HEIGHT), self.tracking_image.buf)
+            img = ImageTk.PhotoImage(image=img)
+            self.tracking_image_label.config(image=img)
+            self.tracking_image_label.image = img
+            self.root.after(10, self.update_frame)
+        except KeyboardInterrupt:
+            pass
 
     def run(self):
         start = time.time()
         self.event_processor.start()
         print(f"Event Processor started in {time.time() - start:.2f} seconds")
-        self.root.mainloop()
+        try:
+            self.root.mainloop()
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == '__main__':
