@@ -149,7 +149,8 @@ class EventProcessor(multiprocessing.Process):
         new_x = current_x + dx * SCREEN_WIDTH
         new_y = current_y + dy * SCREEN_HEIGHT
 
-        pyautogui.moveTo(int(new_x), int(new_y), _pause=False)
+        if 0 <= new_x <= SCREEN_WIDTH and 0 <= new_y <= SCREEN_HEIGHT:
+            pyautogui.moveTo(int(new_x), int(new_y), _pause=False)
 
     def pinch_scroll(self):
         coords = self.pointer_coordinates
