@@ -59,14 +59,14 @@ def plot(accuracy_hist: list[float], loss_hist: list[float]):
     import matplotlib.pyplot as plt
     ig, ax1 = plt.subplots(figsize=(10, 5))
 
-    ax1.plot(range(1, len(accuracy_hist) + 1), accuracy_hist, marker='o', color='b', label='Accuracy')
+    ax1.plot(range(1, len(accuracy_hist) + 1), accuracy_hist, color='b', label='Accuracy')
     ax1.set_xlabel('Steps')
     ax1.set_ylabel('Accuracy', color='b')
     ax1.tick_params(axis='y', labelcolor='b')
     ax1.legend(loc='upper left')
 
     ax2 = ax1.twinx()
-    ax2.plot(range(1, len(loss_hist) + 1), loss_hist, marker='o', color='r', label='Loss')
+    ax2.plot(range(1, len(loss_hist) + 1), loss_hist, color='r', label='Loss')
     ax2.set_ylabel('Loss', color='r')
     ax2.tick_params(axis='y', labelcolor='r')
     ax2.legend(loc='upper right')
@@ -113,7 +113,7 @@ def train_model(model: torch.nn.Module, dataset: Dataset, epochs=10, batch_size=
             accum_accuracy += accuracy
             accuracy_hist.append(accuracy)
 
-        if (epoch + 1) % 25 == 0:
+        if (epoch + 1) % 100 == 0:
             loss = accum_loss / len(dataloader)
             accuracy = accum_accuracy / len(dataloader)
             print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}, "
@@ -166,9 +166,9 @@ if __name__ == "__main__":
     num_classes = len(labels)
 
     # da model
-    model_ = GestureNet(hidden_size=64, output_size=num_classes).to(device)
+    model_ = GestureNet(hidden_size=48, output_size=num_classes).to(device)
     print(model_)
-    train_model(model_, data, epochs=1000, batch_size=256)
+    train_model(model_, data, epochs=2000, batch_size=512)
     stats(model_, GestureDataset(file_path=dataset_file, _labels=labels), num_classes, labels,
           csv_filename="./gesture_rec/stats.csv")
 

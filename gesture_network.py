@@ -21,13 +21,13 @@ class GestureNet(nn.Module):
         self.pooling = nn.MaxPool1d(kernel_size=2)
         self.coord_norm = nn.BatchNorm1d(hidden_size)
 
-        self.rad_proj = nn.Linear(len(HAND_LANDMARK_ANGLES), hidden_size)
-        self.rad_norm = nn.LayerNorm(hidden_size)
+        self.rad_proj = nn.Linear(len(HAND_LANDMARK_ANGLES), hidden_size, bias=False)
+        self.rad_norm = nn.LayerNorm(hidden_size, bias=False)
 
-        self.dist_proj = nn.Linear(len(HAND_LANDMARK_DISTANCES), hidden_size)
-        self.dist_norm = nn.LayerNorm(hidden_size)
-        self.dropout = nn.Dropout(p=0.2)
-        self.down_proj = nn.Linear(3 * hidden_size, output_size)
+        self.dist_proj = nn.Linear(len(HAND_LANDMARK_DISTANCES), hidden_size, bias=False)
+        self.dist_norm = nn.LayerNorm(hidden_size, bias=False)
+        self.dropout = nn.Dropout(p=0.1)
+        self.down_proj = nn.Linear(hidden_size, output_size, bias=False)
 
         self.act = F.leaky_relu
 
@@ -70,7 +70,6 @@ class GestureNet(nn.Module):
         dist = self.dist_norm(self.act(self.dist_proj(self.get_dist(x))))
         cp = self.coord_norm(self.convoluted_forward(x))
 
-        x = torch.cat([cp, rad, dist], dim=-1)
-        x = self.dropout(x)
+        x = self.dropout(rad + dist + cp)
         x = self.down_proj(x)
         return x

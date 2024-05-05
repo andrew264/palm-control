@@ -122,6 +122,9 @@ class EventProcessor(multiprocessing.Process):
         else:
             self.tracking_image.buf[:_last_video_frame.nbytes] = _last_video_frame.tobytes()
 
+    def smooth_coords(self, curr_coord: float, prev_coord: float) -> float:
+        return prev_coord * (1 - self.mouse_smoothness_alpha) + curr_coord * self.mouse_smoothness_alpha
+
     def do_mouse_movement(self, ):
         coords = self.pointer_coordinates
         if coords is None:
@@ -132,9 +135,8 @@ class EventProcessor(multiprocessing.Process):
         depth_mul = np.interp(-current_z, (0.01, 0.2), (60, 70))
 
         # Smooth the mouse movement
-        alpha = self.mouse_smoothness_alpha
-        x_smoothed = prev_x * (1 - alpha) + current_x * alpha
-        y_smoothed = prev_y * (1 - alpha) + current_y * alpha
+        x_smoothed = self.smooth_coords(current_x, prev_x)
+        y_smoothed = self.smooth_coords(current_y, prev_y)
 
         distance = ((x_smoothed - prev_x) ** 2 + (y_smoothed - prev_y) ** 2) ** .5
         if distance < 1e-3:
@@ -161,9 +163,8 @@ class EventProcessor(multiprocessing.Process):
         current_x, current_y, current_z = current_coords
 
         # Smooth the mouse movement
-        alpha = self.mouse_smoothness_alpha
-        x_smoothed = prev_x * (1 - alpha) + current_x * alpha
-        y_smoothed = prev_y * (1 - alpha) + current_y * alpha
+        x_smoothed = self.smooth_coords(current_x, prev_x)
+        y_smoothed = self.smooth_coords(current_y, prev_y)
 
         distance = ((x_smoothed - prev_x) ** 2 + (y_smoothed - prev_y) ** 2) ** .5
         if distance < 1e-3:
