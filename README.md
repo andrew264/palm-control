@@ -22,6 +22,8 @@ Download [MODEL LINK](https://storage.googleapis.com/mediapipe-models/hand_landm
 
 # Notes
 
+### 07-05-2024 - My disappointment is immeasurable and my day is ruined
+
 In linux you can use `scrcpy` to use your mobile as a webcam
 
 ```shell
@@ -41,9 +43,3 @@ This will stream the video from the mobile **at 60 fps** to the `/dev/video0` wh
 - [x] Gesture classification
 - [x] Training code and Dataset creation code
 - [x] ONNX model inference
-
-# TODO (what I think I need to do)
-
-- [ ] Run faster ???
-- [ ] Add more gestures ???
-- [ ] profit ???
