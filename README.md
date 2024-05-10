@@ -68,18 +68,18 @@ This will stream the video from the mobile **at 60 fps** to the `/dev/video0` wh
 
 ## Architecture Diagram
 
-![App Screenshot](https://github.com/andrew264/palm-control/img/architecture_diagram.png)
+<img src="./img/architecture_diagram.png" width="" height="800">
 
 ## Workflow Diagram
 
-![App Screenshot](https://github.com/andrew264/palm-control/img/workflow_diagram.png)
+<img src="./img/workflow_diagram.png" width="" height="800">
 
 ## GestureNet Architecture
 
-![App Screenshot](https://github.com/andrew264/palm-control/img/gesturenet_architecture.png)
+<img src="./img/gesturenet_architecture.png" width="" height="800">
 
 ## User Interface of Palm Control
 
-![App Screenshot](https://github.com/andrew264/palm-control/img/ui1.png)
+<img src="./img/ui1.png" width="1073" height="709">
 
-![App Screenshot](https://github.com/andrew264/palm-control/img/ui2.png)
+<img src="./img/ui2.png" width="1073" height="709">
