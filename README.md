@@ -82,4 +82,4 @@ This will stream the video from the mobile **at 60 fps** to the `/dev/video0` wh
 
 <img src="./img/ui1.png" >
 
-<img src="./img/ui2.png" >
+<img src="./img/hand.png" >
