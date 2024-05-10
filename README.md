@@ -43,3 +43,43 @@ This will stream the video from the mobile **at 60 fps** to the `/dev/video0` wh
 - [x] Gesture classification
 - [x] Training code and Dataset creation code
 - [x] ONNX model inference
+
+## GestureNet Classes
+
+
+
+| Class Name | Action     | Description                |
+| :-------- | :------- | :------------------------- |
+| `NONE` | - | - |
+| `CLOSED_PALM` | Closed hand | None |
+| `INDEX_POINTING` | Point index finger | Mouse move |
+| `OPEN_PALM` | Open hand | Mouse move |
+| `THUMB_MIDDLE_TOUCH` | Pinch thumb and middle finger | Mouse left button |
+| `THUMB_RING_TOUCH` | Pinch thumb and ring finger | Mouse right button |
+| `THUMB_PINKY_TOUCH` | Pinch thumb and pinky | Text input with voice |
+| `3_FINGER_PINCH` | Pinch thumb, index and middle | Mouse drag |
+| `5_FINGER_PINCH` | Pinch with all fingers | Mouse scroll |
+| `THUMBS_UP` | Thumbs Up | Volume up |
+| `THUMBS_DOWN` | Thumbs Down | Volume down |
+| `MIDDLE_UP` | Middle finger upwards | Copy text |
+| `MIDDLE_DOWN` | Middle finger downwards | Paste text |
+
+
+
+## Architecture Diagram
+
+![App Screenshot](https://github.com/andrew264/palm-control/img/architecture_diagram.png)
+
+## Workflow Diagram
+
+![App Screenshot](https://github.com/andrew264/palm-control/img/workflow_diagram.png)
+
+## GestureNet Architecture
+
+![App Screenshot](https://github.com/andrew264/palm-control/img/gesturenet_architecture.png)
+
+## User Interface of Palm Control
+
+![App Screenshot](https://github.com/andrew264/palm-control/img/ui1.png)
+
+![App Screenshot](https://github.com/andrew264/palm-control/img/ui2.png)
