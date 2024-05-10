@@ -80,6 +80,6 @@ This will stream the video from the mobile **at 60 fps** to the `/dev/video0` wh
 
 ## User Interface of Palm Control
 
-<img src="./img/ui1.png" width="1073" height="709">
+<img src="./img/ui1.png" >
 
-<img src="./img/ui2.png" width="1073" height="709">
+<img src="./img/ui2.png" >
